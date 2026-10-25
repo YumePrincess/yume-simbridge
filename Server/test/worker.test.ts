@@ -19,6 +19,7 @@ class DB {
     this.db.exec(readFileSync("migrations/0001.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0002_recordings.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0003_notifications.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0004_totp.sql", "utf8"));
   }
   prepare(sql: string) {
     const stmt = this.db.prepare(sql);
@@ -661,5 +662,202 @@ describe("dial result announcements", () => {
     ).text();
     expect(body).toContain('language="ja-JP"');
     expect(body).toContain("おかけになった電話");
+  });
+});
+
+describe("authenticator enrollment, verification and reset", () => {
+  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  it("matches the RFC 6238 SHA-1 test vectors (six digit truncation)", async () => {
+    const { totpCode, base32, matchingStep } = await import("../src/totp");
+    expect(base32(new TextEncoder().encode("12345678901234567890"))).toBe(
+      secret,
+    );
+    for (const [seconds, expected] of [
+      [59, "287082"],
+      [1111111109, "081804"],
+      [1111111111, "050471"],
+      [1234567890, "005924"],
+      [2000000000, "279037"],
+      [20000000000, "353130"],
+    ] as const) {
+      expect(await totpCode(secret, Math.floor(seconds / 30))).toBe(expected);
+    }
+    expect(await matchingStep(secret, "287082", 59000)).toBe(1);
+    expect(await matchingStep(secret, "287082", 89000)).toBe(1);
+    expect(await matchingStep(secret, "287082", 120000)).toBeNull();
+    expect(await matchingStep(secret, "12345a", 59000)).toBeNull();
+  });
+  it("atomically accepts a code once across concurrent calls and rejects older steps", async () => {
+    const { consumeTOTP, totpCode } = await import("../src/totp");
+    vi.spyOn(Date, "now").mockReturnValue(1234567890000);
+    const step = Math.floor(Date.now() / 30000);
+    const code = await totpCode(secret, step);
+    const results = await Promise.all([
+      consumeTOTP(env, secret, code),
+      consumeTOTP(env, secret, code),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(
+      await consumeTOTP(env, secret, await totpCode(secret, step - 1)),
+    ).toBe(false);
+    expect(
+      await consumeTOTP(env, secret, await totpCode(secret, step + 1)),
+    ).toBe(true);
+  });
+  it("requires authenticated setup, hides keys from normal settings, and leaves password mode unchanged until confirmation", async () => {
+    expect(
+      (
+        await worker.fetch!(
+          new Request(env.PUBLIC_ORIGIN + "/edge/totp/setup", {
+            method: "POST",
+          }),
+          env,
+          ctx,
+        )
+      ).status,
+    ).toBe(401);
+    const response = await edge("/edge/totp/setup", {});
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    const enrollment = (await response.json()) as {
+      secret: string;
+      uri: string;
+    };
+    expect(enrollment.secret).toMatch(/^[A-Z2-7]{32}$/);
+    expect(enrollment.uri).toContain("otpauth://totp/");
+    const state = await (await edge("/edge/state")).text();
+    expect(state).not.toContain(enrollment.secret);
+    expect(state).not.toContain("totpSecret");
+    expect(state).not.toContain("authGeneration");
+    expect(JSON.parse(state).settings.authMode).toBe("password");
+    const row = (await db
+      .prepare("SELECT value FROM totp_enrollment WHERE id=1")
+      .first()) as { value: string };
+    expect(row.value).not.toContain(enrollment.secret);
+    expect(
+      (await edge("/edge/settings", { authMode: "totp" }, "PUT")).status,
+    ).toBe(400);
+    expect((await edge("/edge/totp/confirm", { code: "invalid" })).status).toBe(
+      400,
+    );
+  });
+  it("activates only after proving possession, uses OTP instead of PIN, and permits switching back to password mode", async () => {
+    const { totpCode } = await import("../src/totp");
+    const { config } = await import("../src/config");
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1234567890000);
+    const enrollment = (await (await edge("/edge/totp/setup", {})).json()) as {
+      secret: string;
+    };
+    const code = await totpCode(
+      enrollment.secret,
+      Math.floor(Date.now() / 30000),
+    );
+    expect((await edge("/edge/totp/confirm", { code })).status).toBe(200);
+    expect((await config(env)).authMode).toBe("totp");
+    const prompt = await (await webhook("/twilio/voice")).text();
+    expect(prompt).toContain("authenticator");
+    expect(
+      await (await webhook("/twilio/pin", { Digits: code })).text(),
+    ).toContain("already used");
+    expect(
+      await (await webhook("/twilio/pin", { Digits: "654321" })).text(),
+    ).not.toContain('action="/twilio/dial"');
+    clock.mockReturnValue(1234567920000);
+    const next = await totpCode(
+      enrollment.secret,
+      Math.floor(Date.now() / 30000),
+    );
+    expect(
+      await (await webhook("/twilio/pin", { Digits: next })).text(),
+    ).toContain('action="/twilio/dial"');
+    expect(
+      (await edge("/edge/settings", { authMode: "password" }, "PUT")).status,
+    ).toBe(200);
+    const other = "CA" + "d".repeat(32);
+    await webhook("/twilio/voice", { CallSid: other });
+    expect(
+      await (
+        await webhook("/twilio/pin", { CallSid: other, Digits: "654321" })
+      ).text(),
+    ).toContain('action="/twilio/dial"');
+  });
+  it("reset revokes the old secret, pending phone sessions and unclaimed dial tickets", async () => {
+    const { totpCode, consumeTOTP } = await import("../src/totp");
+    const { config } = await import("../src/config");
+    vi.spyOn(Date, "now").mockReturnValue(1234567890000);
+    await saveConfig(env, {
+      ...(await config(env)),
+      authMode: "totp",
+      totpSecret: secret,
+      authGeneration: "old",
+    });
+    await webhook("/twilio/voice");
+    await db
+      .prepare(
+        "INSERT INTO jobs(id,kind,payload,status,created,updated) VALUES('old-ticket','dial',?,'queued',?,?)",
+      )
+      .bind(
+        JSON.stringify({ to: "12345", authGeneration: "old" }),
+        Date.now(),
+        Date.now(),
+      )
+      .run();
+    const enrollment = (await (await edge("/edge/totp/setup", {})).json()) as {
+      secret: string;
+    };
+    expect((await config(env)).totpSecret).toBe(secret);
+    const code = await totpCode(
+      enrollment.secret,
+      Math.floor(Date.now() / 30000),
+    );
+    expect((await edge("/edge/totp/confirm", { code })).status).toBe(200);
+    const replaced = await config(env);
+    expect(replaced.totpSecret).toBe(enrollment.secret);
+    expect(replaced.authGeneration).not.toBe("old");
+    expect(await db.prepare("SELECT id FROM sessions").first()).toBeNull();
+    expect((await edge("/edge/authorize", { id: "old-ticket" })).status).toBe(
+      403,
+    );
+    await webhook("/twilio/voice");
+    expect(
+      await (
+        await webhook("/twilio/pin", {
+          Digits: await totpCode(secret, Math.floor(Date.now() / 30000)),
+        })
+      ).text(),
+    ).not.toContain('action="/twilio/dial"');
+    expect(await consumeTOTP(env, replaced.totpSecret, code)).toBe(false);
+    // A racing request that inserts an old-generation ticket after reset also fails.
+    await db
+      .prepare(
+        "INSERT INTO jobs(id,kind,payload,status,created,updated) VALUES('raced-ticket','dial',?,'queued',?,?)",
+      )
+      .bind(
+        JSON.stringify({ to: "12345", authGeneration: "old" }),
+        Date.now(),
+        Date.now(),
+      )
+      .run();
+    expect((await edge("/edge/authorize", { id: "raced-ticket" })).status).toBe(
+      403,
+    );
+  });
+  it("rejects expired and replaced enrollment codes", async () => {
+    const { totpCode } = await import("../src/totp");
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1234567890000);
+    const first = (await (await edge("/edge/totp/setup", {})).json()) as {
+      secret: string;
+    };
+    await edge("/edge/totp/setup", {});
+    expect(
+      (
+        await edge("/edge/totp/confirm", {
+          code: await totpCode(first.secret, Math.floor(Date.now() / 30000)),
+        })
+      ).status,
+    ).toBe(400);
+    clock.mockReturnValue(Date.now() + 601000);
+    expect((await edge("/edge/totp/confirm", { code: "123456" })).status).toBe(
+      400,
+    );
   });
 });

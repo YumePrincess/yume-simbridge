@@ -109,7 +109,9 @@ func TestCarrierAudioBeforeAnswerAndAfterPromotion(t *testing.T) {
 	verifyAudio(0x31)
 	answered := make(chan error, 1)
 	go func() {
-		err := r.d.WaitAnswer(ctx, r.m, sipgo.AnswerOptions{})
+		// SDP is unchanged in the final answer. Wait at the SIP layer so
+		// the test peer does not mutate the live RTP remote address.
+		err := r.d.DialogClientSession.WaitAnswer(ctx, sipgo.AnswerOptions{})
 		if err == nil {
 			err = r.d.Ack(ctx)
 		}

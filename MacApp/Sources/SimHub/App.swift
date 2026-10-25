@@ -1,11 +1,14 @@
 import AVFoundation
 import AppKit
+import CoreImage.CIFilterBuiltins
 import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct Settings: Codable {
   var serviceLanguage: String? = "en"
+  var authMode: String? = "password"
+  var totpConfigured: Bool? = false
   var forwardTo = "+12025550123"
   var gotifyUrl = "https://gotify.example.com"
   var allowedSenders = ["sender@example.com"]
@@ -18,6 +21,11 @@ struct Settings: Codable {
   var pinConfigured = false
   var twilioConfigured = false
   var sipConfigured = false
+}
+struct TOTPEnrollment: Codable {
+  var secret: String
+  var uri: String
+  var expires: Double
 }
 struct Edge: Codable {
   var online: Bool?
@@ -94,6 +102,11 @@ struct Bootstrap: Codable {
   @Published var running = false
   @Published var notice = ""
   @Published var pin = ""
+  @Published var showTOTPSetup = false
+  @Published var totpBusy = false
+  @Published var totpEnrollment: TOTPEnrollment?
+  @Published var totpCode = ""
+  @Published var totpError = ""
   @Published var gotifyToken = ""
   @Published var twilioToken = ""
   @Published var sipPassword = ""
@@ -309,6 +322,42 @@ struct Bootstrap: Codable {
       notice = L("配置已保存")
       await refresh()
     } catch { notice = error.localizedDescription }
+  }
+  func selectAuthMode(_ mode: String) {
+    if mode == "totp" && settings.totpConfigured != true {
+      Task { await beginTOTP() }
+    } else { settings.authMode = mode }
+  }
+  func beginTOTP() async {
+    guard !totpBusy else { return }
+    totpBusy = true
+    defer { totpBusy = false }
+    do {
+      totpEnrollment = try JSONDecoder().decode(TOTPEnrollment.self,
+        from: await request("/edge/totp/setup", method: "POST", body: [:]))
+      totpCode = ""
+      totpError = ""
+      showTOTPSetup = true
+    } catch { notice = L(error.localizedDescription) }
+  }
+  func confirmTOTP() async {
+    guard !totpBusy else { return }
+    totpBusy = true
+    defer { totpBusy = false }
+    do {
+      _ = try await request("/edge/totp/confirm", method: "POST", body: ["code": totpCode])
+      settings.authMode = "totp"
+      settings.totpConfigured = true
+      pin = ""
+      showTOTPSetup = false
+      clearTOTPSetup()
+      notice = L("2FA 已绑定并启用；电话验证请使用下一组验证码。")
+    } catch { totpError = L(error.localizedDescription) }
+  }
+  func clearTOTPSetup() {
+    totpEnrollment = nil
+    totpCode = ""
+    totpError = ""
   }
   func importToken() {
     do {
@@ -603,13 +652,28 @@ struct Content: View {
               .secondary)
             TextField(L("SIM 来电转接号码"), text: $model.settings.forwardTo)
             Toggle(L("启用 SIM 来电 → Twilio → 目标号码"), isOn: $model.settings.inboundEnabled)
-            SecureField(
-              model.settings.pinConfigured ? L("电话密码（已设置，留空保持）") : L("电话密码（6–12 位数字）"),
-              text: $model.pin)
-            Toggle(L("启用 Twilio 密码验证 → SIM 外呼"), isOn: $model.settings.outboundEnabled)
-            Text(L("拨打 +12025550124 → 密码 + # → 本地号码或 *国际号码 + #")).font(.caption)
-              .foregroundStyle(
-                .secondary)
+            Picker(L("电话验证模式"), selection: Binding(
+              get: { model.settings.authMode ?? "password" },
+              set: { model.selectAuthMode($0) })) {
+              Text(L("密码模式")).tag("password")
+              Text(L("2FA 模式（验证器）")).tag("totp")
+            }.disabled(model.totpBusy)
+            if model.settings.authMode == "totp" {
+              HStack {
+                Label(L("验证器已绑定"), systemImage: "checkmark.shield")
+                Spacer()
+                Button(L("重设 2FA")) { Task { await model.beginTOTP() } }
+                  .disabled(model.totpBusy)
+              }
+              Text(L("拨打 Twilio 后输入验证器的六位验证码，再按 #；验证码只能使用一次。")).font(.caption).foregroundStyle(.secondary)
+            } else {
+              SecureField(
+                model.settings.pinConfigured ? L("电话密码（已设置，留空保持）") : L("电话密码（6–12 位数字）"),
+                text: $model.pin)
+            }
+            Toggle(L("启用 Twilio 身份验证 → SIM 外呼"), isOn: $model.settings.outboundEnabled)
+            Text(L("拨打 +12025550124 → 身份验证 + # → 本地号码或 *国际号码 + #")).font(.caption)
+              .foregroundStyle(.secondary)
           }
           Section(L("Gotify 短信推送")) {
             TextField(L("服务地址"), text: $model.settings.gotifyUrl)
@@ -711,7 +775,10 @@ struct Content: View {
         Spacer()
         Button(L("刷新")) { Task { await model.refresh() } }
       }
-    }.environment(\.locale, Locale(identifier: model.language)).padding(24).sheet(
+    }.environment(\.locale, Locale(identifier: model.language)).padding(24)
+    .sheet(isPresented: $model.showTOTPSetup, onDismiss: { model.clearTOTPSetup() }) {
+      TOTPSetupView(model: model)
+    }.sheet(
       isPresented: $model.showSetup
     ) {
       VStack(alignment: .leading, spacing: 18) {
@@ -833,5 +900,46 @@ struct ClientPreferences: View {
         Text(model.versionLabel).font(.caption)
       }
     }.formStyle(.grouped)
+  }
+}
+
+struct TOTPSetupView: View {
+  @ObservedObject var model: Model
+  private func qrImage(_ uri: String) -> NSImage? {
+    let filter = CIFilter.qrCodeGenerator()
+    filter.message = Data(uri.utf8)
+    filter.correctionLevel = "M"
+    guard let output = filter.outputImage,
+      let image = CIContext().createCGImage(output.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
+        from: output.extent.applying(CGAffineTransform(scaleX: 8, y: 8))) else { return nil }
+    return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+  }
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      Text(L("绑定 Google Authenticator")).font(.title2.bold())
+      Text(L("使用 Google Authenticator 或兼容的验证器扫描二维码，也可手动输入绑定密钥。"))
+      Text(L("新绑定成功后，旧密钥和未完成的电话验证立即失效。")).font(.caption).foregroundStyle(.secondary)
+      if let enrollment = model.totpEnrollment {
+        if let image = qrImage(enrollment.uri) {
+          HStack { Spacer(); Image(nsImage: image).interpolation(.none).resizable().scaledToFit()
+              .frame(width: 240, height: 240).padding(12).background(.white); Spacer() }
+        }
+        Text(L("绑定密钥")).font(.caption).foregroundStyle(.secondary)
+        Text(enrollment.secret).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+        Text(L("六位数字 · 每 30 秒更新 · 密钥和二维码仅在本窗口显示，请妥善保管。"))
+          .font(.caption).foregroundStyle(.secondary)
+        SecureField(L("输入验证器当前六位验证码"), text: $model.totpCode)
+        Text(L("验证成功后立即启用 2FA；取消不会更改当前验证方式。绑定页面 10 分钟后失效。"))
+          .font(.caption).foregroundStyle(.secondary)
+      }
+      if !model.totpError.isEmpty { Text(model.totpError).foregroundStyle(.red) }
+      HStack {
+        Button(L("取消")) { model.showTOTPSetup = false }.disabled(model.totpBusy)
+        Spacer()
+        Button(L("验证并启用 2FA")) { Task { await model.confirmTOTP() } }
+          .buttonStyle(.borderedProminent)
+          .disabled(model.totpBusy || model.totpCode.count != 6 || !model.totpCode.allSatisfy { $0.isASCII && $0.isNumber })
+      }
+    }.padding(26).frame(width: 600).interactiveDismissDisabled(model.totpBusy)
   }
 }

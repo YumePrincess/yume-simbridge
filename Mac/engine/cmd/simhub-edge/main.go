@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27009"
+var Build = "27010"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -465,7 +465,7 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 		return
 	}
 	e.callEvent(ticket.ID, "connected")
-	_ = e.bridge(ctx, d.Context(), med, ev.CallID)
+	_ = e.bridge(ctx, d.Context(), med, ev.CallID, nil)
 	e.callEvent(ticket.ID, "ended")
 }
 func (e *engine) outgoing(d *diago.DialogServerSession) {
@@ -524,15 +524,18 @@ func (e *engine) outgoing(d *diago.DialogServerSession) {
 	defer med.Close()
 	bridgeCtx, stopBridge := context.WithCancel(ctx)
 	bridgeDone := make(chan struct{})
+	ringback := newWaitingRingback(time.Now())
+	defer ringback.waiting.Store(false)
 	go func() {
 		defer close(bridgeDone)
-		_ = e.bridge(bridgeCtx, d.Context(), med, id)
+		_ = e.bridge(bridgeCtx, d.Context(), med, id, ringback)
 		// A broken audio path must not leave CLCC polling or the SIM call alive.
 		cancel()
 	}()
 	defer func() { stopBridge(); <-bridgeDone }()
 	activeCtx, stop := context.WithTimeout(ctx, 110*time.Second)
 	ok, err := e.modem.WaitActive(activeCtx)
+	ringback.waiting.Store(false)
 	stop()
 	if err != nil || !ok {
 		_ = d.Respond(480, "Temporarily Unavailable", nil)
@@ -557,7 +560,7 @@ func hangup(d dialog) {
 	defer cancel()
 	_ = d.Hangup(ctx)
 }
-func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, id modem.CallID) error {
+func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, id modem.CallID, ringback *waitingRingback) error {
 	// O_NONBLOCK prevents open() hanging if the CoreAudio helper has exited.
 	rx, err := os.OpenFile(e.rxPath, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
@@ -672,6 +675,7 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 					n = 0
 				}
 				fromModem.Add(int64(n))
+				ringback.fill(buf, time.Now())
 				encoded, writeErr := encoder.Write(buf)
 				toSIP.Add(int64(encoded))
 				if err = writeErr; err != nil {

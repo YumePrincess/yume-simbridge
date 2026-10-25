@@ -2,6 +2,9 @@ import { serviceLanguages, type ServiceLanguage } from "./languages";
 import { EncryptJWT, jwtDecrypt } from "jose";
 import { unb64, fail, enc, b64 } from "./util";
 export type Config = {
+  authMode: "password" | "totp";
+  authGeneration: string;
+  totpSecret: string;
   serviceLanguage: ServiceLanguage;
   forwardTo: string;
   gotifyUrl: string;
@@ -17,6 +20,9 @@ export type Config = {
   emailEnabled: boolean;
 };
 export const defaults: Config = {
+  authMode: "password",
+  authGeneration: "",
+  totpSecret: "",
   serviceLanguage: "en",
   forwardTo: "+12025550123",
   gotifyUrl: "https://gotify.example.com",
@@ -81,11 +87,20 @@ export async function hashPin(env: Env, pin: string) {
   );
 }
 export function publicConfig(c: Config) {
-  const { gotifyToken, pinHash, twilioToken, sipPassword, ...rest } = c;
+  const {
+    gotifyToken,
+    pinHash,
+    twilioToken,
+    sipPassword,
+    totpSecret,
+    authGeneration,
+    ...rest
+  } = c;
   return {
     ...rest,
     gotifyConfigured: !!gotifyToken,
     pinConfigured: !!pinHash,
+    totpConfigured: !!totpSecret,
     twilioConfigured: !!twilioToken,
     sipConfigured: !!sipPassword,
   };
@@ -96,6 +111,12 @@ export async function updateConfig(
   v: Record<string, unknown>,
 ) {
   const c = { ...old };
+  if ("authMode" in v) {
+    if (v.authMode !== "password" && v.authMode !== "totp")
+      fail("Invalid telephone authentication mode");
+    c.authMode = v.authMode;
+    if (c.authMode === "totp" && !c.totpSecret) fail("请先绑定并验证 2FA");
+  }
   if ("serviceLanguage" in v) {
     if (!serviceLanguages.includes(v.serviceLanguage as ServiceLanguage))
       fail("Invalid service language");
@@ -151,7 +172,8 @@ export async function updateConfig(
     (!c.twilioToken || !c.sipDomain || !c.sipPassword)
   )
     fail("请先配置 Twilio 和 SIP");
-  if (c.outboundEnabled && !c.pinHash) fail("请先设置电话密码");
+  if (c.outboundEnabled && !(c.authMode === "totp" ? c.totpSecret : c.pinHash))
+    fail("请先设置电话验证方式");
   await saveConfig(env, c);
   return c;
 }

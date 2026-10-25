@@ -3,6 +3,7 @@ import { equal, fail, HttpError, readBytes } from "./util";
 import release from "../../version.json";
 import { claimSMS, enqueue, event, limit, now, online } from "./store";
 import { voice } from "./voice";
+import { totpAPI } from "./totp";
 import { receive } from "./email";
 import { listRecordings, recordingAPI, recordingTasks } from "./recordings";
 import { notify } from "./gotify";
@@ -32,6 +33,15 @@ async function edgeAPI(
     !equal(req.headers.get("Authorization") || "", "Bearer " + env.EDGE_TOKEN)
   )
     fail("Unauthorized", 401);
+  if (path.startsWith("/edge/totp/"))
+    return json(
+      await totpAPI(
+        req,
+        env,
+        path,
+        req.method === "POST" ? await body(req) : {},
+      ),
+    );
   if (path === "/edge/release" && req.method === "GET")
     return json({
       ...release,
@@ -168,7 +178,10 @@ async function edgeAPI(
       .bind(now(), v.id, now() - 60000)
       .first<{ payload: string }>();
     if (!job) fail("Call authorization expired", 403);
-    return json(JSON.parse(job.payload));
+    const authorized = JSON.parse(job.payload);
+    if ((authorized.authGeneration || "") !== c.authGeneration)
+      fail("Call authorization expired", 403);
+    return json(authorized);
   }
   if (path === "/edge/call-event") {
     if (
@@ -234,6 +247,7 @@ export default {
   async scheduled(_controller, env, _ctx) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM sessions WHERE expires<?").bind(now()),
+      env.DB.prepare("DELETE FROM totp_enrollment WHERE expires<?").bind(now()),
       env.DB.prepare("DELETE FROM limits WHERE expires<?").bind(now()),
       env.DB.prepare(
         "UPDATE jobs SET status='expired',updated=? WHERE kind IN ('dial','incoming') AND status='queued' AND created<?",

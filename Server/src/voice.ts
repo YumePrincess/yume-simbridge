@@ -1,3 +1,4 @@
+import { consumeTOTP } from "./totp";
 import { prompt, speech, type Prompt } from "./languages";
 import { recordingCallback, recordingTasks } from "./recordings";
 import { config, hashPin, cellularNumber } from "./config";
@@ -61,27 +62,34 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" callerId="${xml(env.TWILIO_NUMBER)}" timeout="30" timeLimit="7200" action="/twilio/forward-done"><Number>${xml(c.forwardTo)}</Number></Dial><Hangup/>`,
     );
   }
-  if (!c.outboundEnabled || !c.pinHash) return hang("disabled");
+  if (!c.outboundEnabled || !(c.authMode === "totp" ? c.totpSecret : c.pinHash))
+    return hang("disabled");
   if (!fields.To?.includes(env.TWILIO_NUMBER)) return hang("invalid");
   if (path === "/twilio/voice") {
     await limit(env, "voice:" + fields.From, 10, 900);
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO sessions(id,expires,updated) VALUES(?,?,?)",
+      "INSERT OR IGNORE INTO sessions(id,expires,updated,auth_generation) VALUES(?,?,?,?)",
     )
-      .bind(sid, now() + 180000, now())
+      .bind(sid, now() + 180000, now(), c.authGeneration)
       .run();
-    return gather("pin", "pin");
+    return gather("pin", c.authMode === "totp" ? "otp" : "pin");
   }
   if (path === "/twilio/pin") {
     // Count attempts atomically before verification; even concurrent webhooks share the bound.
     const s = await env.DB.prepare(
-      "UPDATE sessions SET attempts=attempts+1,updated=? WHERE id=? AND stage='pin' AND attempts<3 AND expires>? RETURNING attempts",
+      "UPDATE sessions SET attempts=attempts+1,updated=? WHERE id=? AND stage='pin' AND attempts<3 AND expires>? AND auth_generation=? RETURNING attempts",
     )
-      .bind(now(), sid, now())
+      .bind(now(), sid, now(), c.authGeneration)
       .first<{ attempts: number }>();
     if (!s) return hang("denied");
-    if (!equal(await hashPin(env, fields.Digits || ""), c.pinHash))
-      return s.attempts < 3 ? gather("pin", "retry") : hang("denied");
+    const valid =
+      c.authMode === "totp"
+        ? await consumeTOTP(env, c.totpSecret, fields.Digits || "")
+        : equal(await hashPin(env, fields.Digits || ""), c.pinHash);
+    if (!valid)
+      return s.attempts < 3
+        ? gather("pin", c.authMode === "totp" ? "otpRetry" : "retry")
+        : hang("denied");
     await env.DB.prepare(
       "UPDATE sessions SET stage='number',updated=? WHERE id=? AND stage='pin'",
     )
@@ -100,9 +108,9 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
     if (!edge.online || !edge.voiceReady || !edge.sipRegistered)
       return hang("offline");
     const accepted = await env.DB.prepare(
-      "UPDATE sessions SET stage='dialed',updated=? WHERE id=? AND stage='number' AND expires>? RETURNING id",
+      "UPDATE sessions SET stage='dialed',updated=? WHERE id=? AND stage='number' AND expires>? AND auth_generation=? RETURNING id",
     )
-      .bind(now(), sid, now())
+      .bind(now(), sid, now(), c.authGeneration)
       .first();
     if (!accepted) return hang("expired");
     const ticket = crypto.randomUUID();
@@ -110,6 +118,7 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       to: target,
       callSid: sid,
       from: fields.From,
+      authGeneration: c.authGeneration,
     });
     const sip = `sip:${c.sipUser}@${c.sipDomain}?X-Job=${encodeURIComponent(ticket)}`;
     return response(

@@ -922,5 +922,137 @@
     "fr": "Utilisez le DMG pour l’installation initiale, le ZIP pour les mises à jour. La signature est vérifiée et les données sont conservées.",
     "ja": "初回インストールは DMG、App 内の更新は ZIP を使用します。署名を検証し、認証情報とデータを保持します。",
     "zh-Hant": "首次安裝使用 DMG，App 內更新選擇 ZIP。更新會驗證簽章並保留本機憑證與資料。"
+  },
+  "电话验证模式": {
+    "en": "Telephone authentication",
+    "fr": "Authentification téléphonique",
+    "ja": "電話の認証方式",
+    "zh-Hant": "電話驗證模式"
+  },
+  "密码模式": {
+    "en": "Password mode",
+    "fr": "Mode mot de passe",
+    "ja": "パスワード方式",
+    "zh-Hant": "密碼模式"
+  },
+  "2FA 模式（验证器）": {
+    "en": "2FA mode (authenticator)",
+    "fr": "Mode 2FA (authentificateur)",
+    "ja": "2FA 方式（認証アプリ）",
+    "zh-Hant": "2FA 模式（驗證器）"
+  },
+  "验证器已绑定": {
+    "en": "Authenticator linked",
+    "fr": "Authentificateur associé",
+    "ja": "認証アプリ連携済み",
+    "zh-Hant": "驗證器已綁定"
+  },
+  "重设 2FA": {
+    "en": "Reset 2FA",
+    "fr": "Réinitialiser la 2FA",
+    "ja": "2FA を再設定",
+    "zh-Hant": "重設 2FA"
+  },
+  "拨打 Twilio 后输入验证器的六位验证码，再按 #；验证码只能使用一次。": {
+    "en": "After calling Twilio, enter the six-digit authenticator code and press #. Each code can be used once.",
+    "fr": "Après avoir appelé Twilio, saisissez le code à six chiffres puis #. Chaque code est à usage unique.",
+    "ja": "Twilio への発信後、認証アプリの6桁のコードを入力し、# を押してください。コードは1回のみ使用できます。",
+    "zh-Hant": "撥打 Twilio 後輸入驗證器的六位驗證碼，再按 #；驗證碼只能使用一次。"
+  },
+  "启用 Twilio 身份验证 → SIM 外呼": {
+    "en": "Enable Twilio authentication → SIM calling",
+    "fr": "Activer l’authentification Twilio → appels SIM",
+    "ja": "Twilio 認証 → SIM 発信を有効にする",
+    "zh-Hant": "啟用 Twilio 身分驗證 → SIM 外呼"
+  },
+  "拨打 +12025550124 → 身份验证 + # → 本地号码或 *国际号码 + #": {
+    "en": "Call +12025550124 → authenticate + # → local number or *international number + #",
+    "fr": "Appelez le +12025550124 → authentification + # → numéro local ou *numéro international + #",
+    "ja": "+12025550124 に発信 → 認証 + # → 国内番号または *国際番号 + #",
+    "zh-Hant": "撥打 +12025550124 → 身分驗證 + # → 本地號碼或 *國際號碼 + #"
+  },
+  "绑定 Google Authenticator": {
+    "en": "Link Google Authenticator",
+    "fr": "Associer Google Authenticator",
+    "ja": "Google Authenticator を連携",
+    "zh-Hant": "綁定 Google Authenticator"
+  },
+  "使用 Google Authenticator 或兼容的验证器扫描二维码，也可手动输入绑定密钥。": {
+    "en": "Scan with Google Authenticator or a compatible app, or enter the setup key manually.",
+    "fr": "Scannez avec Google Authenticator ou une application compatible, ou saisissez la clé manuellement.",
+    "ja": "Google Authenticator または互換アプリで QR コードを読み取るか、設定キーを手動入力してください。",
+    "zh-Hant": "使用 Google Authenticator 或相容的驗證器掃描 QR 碼，也可手動輸入綁定密鑰。"
+  },
+  "新绑定成功后，旧密钥和未完成的电话验证立即失效。": {
+    "en": "Once the new key is verified, the old key and pending telephone authorizations are immediately revoked.",
+    "fr": "Une fois la nouvelle clé vérifiée, l’ancienne clé et les autorisations téléphoniques en attente sont révoquées.",
+    "ja": "新しいキーの確認後、古いキーと未完了の電話認証は直ちに無効になります。",
+    "zh-Hant": "新綁定成功後，舊密鑰和未完成的電話驗證立即失效。"
+  },
+  "绑定密钥": {
+    "en": "Setup key",
+    "fr": "Clé de configuration",
+    "ja": "設定キー",
+    "zh-Hant": "綁定密鑰"
+  },
+  "六位数字 · 每 30 秒更新 · 密钥和二维码仅在本窗口显示，请妥善保管。": {
+    "en": "Six digits · Updates every 30 seconds · The key and QR code appear only in this window. Keep them private.",
+    "fr": "Six chiffres · Renouvellement toutes les 30 secondes · La clé et le QR code ne sont affichés que dans cette fenêtre. Gardez-les secrets.",
+    "ja": "6桁・30秒ごとに更新・キーと QR コードはこの画面にのみ表示されます。大切に保管してください。",
+    "zh-Hant": "六位數字 · 每 30 秒更新 · 密鑰和 QR 碼僅在本視窗顯示，請妥善保管。"
+  },
+  "输入验证器当前六位验证码": {
+    "en": "Current six-digit authenticator code",
+    "fr": "Code actuel à six chiffres",
+    "ja": "現在の6桁の認証コード",
+    "zh-Hant": "輸入驗證器目前六位驗證碼"
+  },
+  "验证成功后立即启用 2FA；取消不会更改当前验证方式。绑定页面 10 分钟后失效。": {
+    "en": "Verification enables 2FA immediately. Cancel keeps the current method. Setup expires in 10 minutes.",
+    "fr": "La vérification active immédiatement la 2FA. Annuler conserve la méthode actuelle. La configuration expire après 10 minutes.",
+    "ja": "確認すると直ちに 2FA が有効になります。キャンセルでは現在の方式を維持します。設定は10分で期限切れになります。",
+    "zh-Hant": "驗證成功後立即啟用 2FA；取消不會更改目前驗證方式。綁定頁面 10 分鐘後失效。"
+  },
+  "验证并启用 2FA": {
+    "en": "Verify and enable 2FA",
+    "fr": "Vérifier et activer la 2FA",
+    "ja": "確認して 2FA を有効化",
+    "zh-Hant": "驗證並啟用 2FA"
+  },
+  "2FA 已绑定并启用；电话验证请使用下一组验证码。": {
+    "en": "2FA linked and enabled. Use the next code for telephone authentication.",
+    "fr": "2FA associée et activée. Utilisez le prochain code pour l’authentification téléphonique.",
+    "ja": "2FA を連携して有効にしました。電話認証には次のコードを使用してください。",
+    "zh-Hant": "2FA 已綁定並啟用；電話驗證請使用下一組驗證碼。"
+  },
+  "验证码错误或已使用，请输入新验证码。": {
+    "en": "Invalid or already used one-time code",
+    "fr": "Code incorrect ou déjà utilisé. Saisissez un nouveau code.",
+    "ja": "コードが無効または使用済みです。新しいコードを入力してください。",
+    "zh-Hant": "驗證碼錯誤或已使用，請輸入新驗證碼。"
+  },
+  "绑定已过期，请生成新的绑定码。": {
+    "en": "2FA setup expired; generate a new binding code",
+    "fr": "Configuration expirée. Générez une nouvelle clé.",
+    "ja": "設定の期限が切れました。新しい設定キーを生成してください。",
+    "zh-Hant": "綁定已過期，請產生新的綁定碼。"
+  },
+  "绑定已更改，请生成新的绑定码。": {
+    "en": "2FA setup changed; generate a new binding code",
+    "fr": "La configuration a changé. Générez une nouvelle clé.",
+    "ja": "設定が変更されました。新しい設定キーを生成してください。",
+    "zh-Hant": "綁定已變更，請產生新的綁定碼。"
+  },
+  "请先绑定并验证 2FA": {
+    "en": "Link and verify 2FA first",
+    "fr": "Associez et vérifiez d’abord la 2FA",
+    "ja": "先に 2FA を連携して確認してください",
+    "zh-Hant": "請先綁定並驗證 2FA"
+  },
+  "请先设置电话验证方式": {
+    "en": "Configure telephone authentication first",
+    "fr": "Configurez d’abord l’authentification téléphonique",
+    "ja": "先に電話の認証方式を設定してください",
+    "zh-Hant": "請先設定電話驗證方式"
   }
 }
