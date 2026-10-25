@@ -43,13 +43,26 @@ export async function online(env: Env) {
   const e = await env.DB.prepare(
     "SELECT value,updated FROM edge WHERE id=1",
   ).first<{ value: string; updated: number }>();
-  return e
-    ? {
-        ...JSON.parse(e.value),
-        lastSeen: e.updated,
-        online: now() - e.updated < 45000,
-      }
-    : { online: false };
+  if (!e)
+    return {
+      online: false,
+      serviceOnline: false,
+      voiceReady: false,
+      sipRegistered: false,
+      busy: false,
+    };
+  const value = JSON.parse(e.value);
+  const fresh = now() - e.updated < 15000;
+  const connected = fresh && value.modemConnected === true;
+  return {
+    ...value,
+    lastSeen: e.updated,
+    serviceOnline: fresh,
+    online: connected,
+    voiceReady: connected && value.voiceReady === true,
+    sipRegistered: fresh && value.sipRegistered === true,
+    busy: connected && value.busy === true,
+  };
 }
 export async function claimSMS(env: Env) {
   await env.DB.prepare(

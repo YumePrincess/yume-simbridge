@@ -484,6 +484,15 @@ func runFifoMode(acDevice: AudioDeviceID, asDevice: AudioDeviceID, rxPath: Strin
     var lastStats = CFAbsoluteTimeGetCurrent()
 
     while !interrupted {
+        if let healthPath = argValue("--health") {
+            let devices = getDevices().map { $0.id }
+            let alive = devices.contains(acDevice) && devices.contains(asDevice)
+            let payload: [String: Any] = ["updated": Int64(Date().timeIntervalSince1970 * 1000), "ready": alive]
+            if let bytes = try? JSONSerialization.data(withJSONObject: payload) {
+                try? bytes.write(to: URL(fileURLWithPath: healthPath), options: .atomic)
+            }
+            if !alive { break }
+        }
         let now = CFAbsoluteTimeGetCurrent()
 
         if unitsRunning {

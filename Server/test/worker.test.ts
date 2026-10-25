@@ -145,7 +145,11 @@ describe("control and call authorization", () => {
     ).toBe(403);
   });
   it("cannot skip the PIN, bounds attempts and binds authorization to CallSid", async () => {
-    await edge("/edge/sync", { voiceReady: true, sipRegistered: true });
+    await edge("/edge/sync", {
+      modemConnected: true,
+      voiceReady: true,
+      sipRegistered: true,
+    });
     expect(
       await (await webhook("/twilio/dial", { Digits: "+12025550123" })).text(),
     ).not.toContain("<Sip>");
@@ -157,7 +161,11 @@ describe("control and call authorization", () => {
     ).toContain("Access denied");
   });
   it("creates a one-use dial ticket after a valid PIN and records the entire bridge", async () => {
-    await edge("/edge/sync", { voiceReady: true, sipRegistered: true });
+    await edge("/edge/sync", {
+      modemConnected: true,
+      voiceReady: true,
+      sipRegistered: true,
+    });
     await webhook("/twilio/voice");
     await webhook("/twilio/pin", { Digits: "654321" });
     const xml = await (
@@ -179,8 +187,12 @@ describe("control and call authorization", () => {
       )
       .bind(Date.now(), Date.now())
       .run();
-    const a = (await (await edge("/edge/sync", {})).json()) as { job: unknown };
-    const b = (await (await edge("/edge/sync", {})).json()) as { job: unknown };
+    const a = (await (
+      await edge("/edge/sync", { modemConnected: true })
+    ).json()) as { job: unknown };
+    const b = (await (
+      await edge("/edge/sync", { modemConnected: true })
+    ).json()) as { job: unknown };
     expect(a.job).toBeTruthy();
     expect(b.job).toBeNull();
   });
@@ -398,7 +410,11 @@ describe("local numbering, service language and direct notifications", () => {
     ["02222826128", "02222826128"],
     ["*+12025550123", "+12025550123"],
   ])("preserves the requested dialing form %s", async (input, expected) => {
-    await edge("/edge/sync", { voiceReady: true, sipRegistered: true });
+    await edge("/edge/sync", {
+      modemConnected: true,
+      voiceReady: true,
+      sipRegistered: true,
+    });
     await webhook("/twilio/voice");
     await webhook("/twilio/pin", { Digits: "654321" });
     const xml = await (await webhook("/twilio/dial", { Digits: input })).text();
@@ -502,5 +518,45 @@ describe("local numbering, service language and direct notifications", () => {
       direction: "inbound",
       target: "+12025550123",
     });
+  });
+});
+
+describe("hardware health", () => {
+  it("does not mistake a live Mac heartbeat for a connected module", async () => {
+    await edge("/edge/sync", {
+      modemConnected: false,
+      voiceReady: true,
+      sipRegistered: true,
+      busy: true,
+    });
+    const snapshot = (await (await edge("/edge/state")).json()) as {
+      edge: Record<string, unknown>;
+    };
+    expect(snapshot.edge.online).toBe(false);
+    expect(snapshot.edge.voiceReady).toBe(false);
+    expect(snapshot.edge.busy).toBe(false);
+  });
+  it("invalidates all readiness when a heartbeat expires", async () => {
+    await edge("/edge/sync", {
+      modemConnected: true,
+      voiceReady: true,
+      sipRegistered: true,
+      busy: true,
+    });
+    db.db.exec("UPDATE edge SET updated=updated-16000");
+    const snapshot = (await (await edge("/edge/state")).json()) as {
+      edge: Record<string, unknown>;
+    };
+    expect(snapshot.edge.online).toBe(false);
+    expect(snapshot.edge.voiceReady).toBe(false);
+    expect(snapshot.edge.sipRegistered).toBe(false);
+    expect(snapshot.edge.busy).toBe(false);
+  });
+  it("never claims an SMS while the module is disconnected", async () => {
+    await edge("/edge/send", { to: "10086", body: "test" });
+    const result = (await (
+      await edge("/edge/sync", { modemConnected: false })
+    ).json()) as { job: unknown };
+    expect(result.job).toBeNull();
   });
 });

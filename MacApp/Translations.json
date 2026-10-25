@@ -808,5 +808,53 @@
     "fr": "Choisissez une étape. Installation et mise à jour arrêtent temporairement le service et préservent identifiants et données.",
     "ja": "手順を選んでください。インストールと更新中はサービスを停止し、認証情報とデータを保持します。",
     "zh-Hant": "請選擇一個步驟。安裝與更新會暫停模組服務，並保留受保護的本機設定憑證及執行資料。"
+  },
+  "客户端设置": {
+    "en": "Client settings",
+    "fr": "Réglages du client",
+    "ja": "クライアント設定",
+    "zh-Hant": "用戶端設定"
+  },
+  "客户端语言同步到 macOS 菜单栏，也可在系统设置中选择应用语言。": {
+    "en": "Client language also applies to the macOS menu bar. App language is available in System Settings.",
+    "fr": "La langue s’applique aussi à la barre de menus macOS et figure dans Réglages Système.",
+    "ja": "言語は macOS メニューバーにも反映され、システム設定からも選択できます。",
+    "zh-Hant": "用戶端語言同步到 macOS 選單列，也可在系統設定中選擇 App 語言。"
+  },
+  "短信接收": {
+    "en": "Received SMS",
+    "fr": "SMS reçu",
+    "ja": "SMS 受信",
+    "zh-Hant": "收到簡訊"
+  },
+  "短信发出": {
+    "en": "Sent SMS",
+    "fr": "SMS envoyé",
+    "ja": "SMS 送信",
+    "zh-Hant": "傳送簡訊"
+  },
+  "本机 SIM": {
+    "en": "Local SIM",
+    "fr": "SIM locale",
+    "ja": "この SIM",
+    "zh-Hant": "本機 SIM"
+  },
+  "转接目标": {
+    "en": "Forwarding destination",
+    "fr": "Destination du transfert",
+    "ja": "転送先",
+    "zh-Hant": "轉接目標"
+  },
+  "来源邮箱": {
+    "en": "Source email",
+    "fr": "E-mail d’origine",
+    "ja": "送信元メール",
+    "zh-Hant": "來源信箱"
+  },
+  "不可用": {
+    "en": "Unavailable",
+    "fr": "Indisponible",
+    "ja": "利用不可",
+    "zh-Hant": "無法使用"
   }
 }

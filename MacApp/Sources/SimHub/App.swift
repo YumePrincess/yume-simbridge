@@ -21,6 +21,8 @@ struct Settings: Codable {
 }
 struct Edge: Codable {
   var online: Bool?
+  var modemConnected: Bool?
+  var updated: Double?
   var sim: String?
   var registration: String?
   var `operator`: String?
@@ -67,8 +69,13 @@ struct Bootstrap: Codable {
   var token: String
 }
 @MainActor final class Model: ObservableObject {
-  @Published var language = UserDefaults.standard.string(forKey: "clientLanguage") ?? "zh-Hans" {
-    didSet { UserDefaults.standard.set(language, forKey: "clientLanguage") }
+  private var healthTimer: Timer?
+  @Published var language = ClientLanguage.current() {
+    didSet {
+      UserDefaults.standard.set(language, forKey: "clientLanguage")
+      UserDefaults.standard.set([language], forKey: "AppleLanguages")
+      MenuLocalization.apply(language: language)
+    }
   }
   @Published var showSetup = false
   @Published var setupBusy = false
@@ -133,7 +140,10 @@ struct Bootstrap: Codable {
     }
     showSetup = !UserDefaults.standard.bool(forKey: "setupCompleted")
     loginItem = SMAppService.mainApp.status == .enabled
-    timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+    healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+      Task { @MainActor in self?.refreshLocalHealth() }
+    }
+    timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
       Task { @MainActor in await self?.refresh() }
     }
     Task {
@@ -144,7 +154,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27002")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27003")"
   }
   func setup(_ mode: String) async {
     guard !setupBusy else { return }
@@ -261,6 +271,20 @@ struct Bootstrap: Codable {
     }
     return data
   }
+  func refreshLocalHealth() {
+    let url = folder.appendingPathComponent("runtime/edge-health.json")
+    let local = (try? Data(contentsOf: url)).flatMap {
+      try? JSONDecoder().decode(Edge.self, from: $0)
+    }
+    let age = Date().timeIntervalSince1970 * 1000 - (local?.updated ?? 0)
+    let connected =
+      running && HardwareHealth.modulePresent() && age >= 0 && age < 12000
+      && local?.modemConnected == true
+    edge.online = connected
+    edge.voiceReady = connected && local?.voiceReady == true
+    edge.sipRegistered = connected && local?.sipRegistered == true
+    edge.busy = connected ? local?.busy : nil
+  }
   func refresh() async {
     do {
       let s = try JSONDecoder().decode(Snapshot.self, from: await request("/edge/state"))
@@ -270,6 +294,7 @@ struct Bootstrap: Codable {
         loaded = true
       }
       edge = s.edge
+      refreshLocalHealth()
       messages = s.events
       jobs = s.jobs
       recordings = try JSONDecoder().decode(
@@ -357,7 +382,7 @@ struct Bootstrap: Codable {
       let p = Process()
       p.executableURL = URL(fileURLWithPath: python)
       p.arguments = [
-        "-u", resources.appendingPathComponent("local/supervisor.py").path, "--config", cfg.path,
+        "-u", resources.appendingPathComponent("Mac/supervisor.py").path, "--config", cfg.path,
         "--data", folder.appendingPathComponent("runtime").path,
       ]
       p.environment = ProcessInfo.processInfo.environment.merging([
@@ -515,7 +540,13 @@ struct Bootstrap: Codable {
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   var model: Model?
+  private var menuTimer: Timer?
   func applicationDidFinishLaunching(_ notification: Notification) {
+    MenuLocalization.apply(language: ClientLanguage.current())
+    menuTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+      Task { @MainActor in MenuLocalization.apply(language: ClientLanguage.current()) }
+    }
+
     if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
       let icon = NSImage(contentsOf: url)
     {
@@ -536,6 +567,7 @@ struct Bootstrap: Codable {
     WindowGroup("Yume SIM Hub") {
       Content(model: model).frame(minWidth: 900, minHeight: 650).onAppear { delegate.model = model }
     }.defaultSize(width: 1060, height: 790)
+    SwiftUI.Settings { ClientPreferences(model: model).frame(width: 520, height: 230) }
     MenuBarExtra("SIM Hub", systemImage: model.running ? "simcard.fill" : "simcard") {
       Text(model.edge.online == true ? L("模块在线") : L("模块离线"))
       Button(model.running ? L("停止服务") : L("启动服务")) {
@@ -561,6 +593,7 @@ struct Content: View {
           Text(L("Mac 蜂窝通信中枢 · ") + model.versionLabel).foregroundStyle(.secondary)
         }
         Spacer()
+        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions() }.frame(width: 210)
         Button(model.running ? L("停止服务") : L("启动服务")) {
           if model.running { model.stop() } else { model.start() }
         }.buttonStyle(.borderedProminent).tint(model.running ? .orange : .accentColor)
@@ -573,7 +606,10 @@ struct Content: View {
         status(
           "SIP", model.edge.sipRegistered == true ? L("已注册") : L("未注册"),
           model.edge.sipRegistered == true)
-        status(L("通话"), model.edge.busy == true ? L("使用中") : L("空闲"), model.edge.busy != true)
+        status(
+          L("通话"),
+          model.edge.online != true ? L("不可用") : (model.edge.busy == true ? L("使用中") : L("空闲")),
+          model.edge.online == true && model.edge.busy != true)
       }
       if !model.notice.isEmpty {
         Text(L(model.notice)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
@@ -752,6 +788,21 @@ struct Content: View {
     }.frame(maxWidth: .infinity, alignment: .leading).padding(14).background(
       .quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
   }
+  func recordTitle(_ r: Record, inbox: Bool) -> String {
+    if inbox { return L("短信接收") + " · " + (r.data["from"] ?? L("未知号码")) }
+    switch r.kind {
+    case "incoming": return L("来电") + " · " + (r.data["from"] ?? L("未知号码"))
+    case "dial": return L("去电") + " · " + (r.data["to"] ?? L("未知号码"))
+    default: return L("短信发出") + " · " + (r.data["to"] ?? L("未知号码"))
+    }
+  }
+  func recordRoute(_ r: Record, inbox: Bool) -> String {
+    if inbox { return (r.data["from"] ?? L("未知号码")) + " → " + L("本机 SIM") }
+    if r.kind == "incoming" { return L("转接目标") + ": " + (r.data["to"] ?? L("未知号码")) }
+    let route = L("本机 SIM") + " → " + (r.data["to"] ?? L("未知号码"))
+    return r.data["source"] == "email"
+      ? route + " · " + L("来源邮箱") + ": " + (r.data["from"] ?? "") : route
+  }
   func records(_ rows: [Record], inbox: Bool) -> some View {
     VStack {
       if inbox {
@@ -763,11 +814,13 @@ struct Content: View {
       List(rows) { r in
         VStack(alignment: .leading, spacing: 8) {
           HStack {
-            Text(r.data[inbox ? "from" : "to"] ?? r.data["from"] ?? L("来电")).font(.headline)
+            Text(recordTitle(r, inbox: inbox)).font(.headline)
             Spacer()
             Text(L(inbox ? (r.notified == 1 ? L("已推送") : L("待推送")) : (r.status ?? ""))).font(
               .caption)
           }
+          Text(recordRoute(r, inbox: inbox)).font(.caption).foregroundStyle(.secondary)
+            .textSelection(.enabled)
           if let body = r.data["body"] { Text(body).textSelection(.enabled) }
           Text(model.dateString(r.created)).font(.caption)
             .foregroundStyle(.secondary)
@@ -780,5 +833,29 @@ struct Content: View {
           .secondary)
       }
     }.padding(12)
+  }
+}
+
+struct LanguageOptions: View {
+  var body: some View {
+    Group {
+      Text("English").tag("en")
+      Text("Français").tag("fr")
+      Text("日本語").tag("ja")
+      Text("简体中文").tag("zh-Hans")
+      Text("繁體中文").tag("zh-Hant")
+    }
+  }
+}
+struct ClientPreferences: View {
+  @ObservedObject var model: Model
+  var body: some View {
+    Form {
+      Section(L("客户端设置")) {
+        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions() }
+        Text(L("客户端语言同步到 macOS 菜单栏，也可在系统设置中选择应用语言。")).font(.caption).foregroundStyle(.secondary)
+        Text(model.versionLabel).font(.caption)
+      }
+    }.formStyle(.grouped)
   }
 }

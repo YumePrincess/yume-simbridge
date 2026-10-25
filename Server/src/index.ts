@@ -87,6 +87,7 @@ async function edgeAPI(
   const v = await body(req);
   if (path === "/edge/sync") {
     const status = {
+      modemConnected: v.modemConnected === true,
       sim: String(v.sim || "unknown"),
       operator: String(v.operator || ""),
       registration: String(v.registration || "unknown"),
@@ -103,7 +104,7 @@ async function edgeAPI(
       .run();
     const c = await config(env);
     return json({
-      job: await claimSMS(env),
+      job: status.modemConnected ? await claimSMS(env) : null,
       sip: { domain: c.sipDomain, user: c.sipUser, password: c.sipPassword },
       inboundEnabled: c.inboundEnabled,
       outboundEnabled: c.outboundEnabled,

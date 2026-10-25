@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+process.chdir(fileURLToPath(new URL('../../',import.meta.url)));
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 const sid='ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',token=(await fs.readFile('.secrets/twilio-token','utf8')).trim();

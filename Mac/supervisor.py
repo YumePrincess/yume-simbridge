@@ -9,6 +9,9 @@ import subprocess
 import sys
 import time
 import shutil
+import json
+import urllib.request
+import threading
 sys.dont_write_bytecode = True
 os.environ["PYTHONDONTWRITEBYTECODE"]="1"
 
@@ -22,9 +25,20 @@ os.umask(0o077)
 children=[]
 stopping=False
 
+def publish_offline():
+    status={'modemConnected':False,'voiceReady':False,'sipRegistered':False,'busy':False,'sim':'unavailable'}
+    (data/'edge-health.json').write_text(json.dumps(dict(status,updated=int(time.time()*1000))))
+    try:
+        cfg=json.loads(Path(args.config).read_text())
+        req=urllib.request.Request(cfg['origin']+'/edge/sync',data=json.dumps(status).encode(),headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json'})
+        urllib.request.urlopen(req,timeout=4).close()
+    except Exception: pass
+
+
 def stop(*_):
     global stopping
     stopping=True
+    publish_offline()
     for child in reversed(children):
         if child.poll() is None:
             child.terminate()
@@ -41,6 +55,8 @@ def start(command,**kw):
     p=subprocess.Popen(command,**kw)
     children.append(p)
     return p
+
+publish_offline()
 
 # A reboot can take a minute to enumerate USB; do not settle into SMS-only mode prematurely.
 import usb.core
@@ -78,11 +94,14 @@ if voice:
         os.mkfifo(fifo,0o600)
     # RDWR handles let CoreAudio open both pipes before the first call arrives.
     held=[os.open(str(f),os.O_RDWR|os.O_NONBLOCK) for f in [rx,tx]]
-    audio=start([str(root/'bin/voice-audio-bridge'),'--fifo-rx',str(rx),'--fifo-tx',str(tx)])
+    audio=start([str(root/'bin/voice-audio-bridge'),'--fifo-rx',str(rx),'--fifo-tx',str(tx),'--health',str(data/'audio-health.json')])
     command+=['--rx',str(rx),'--tx',str(tx)]
 edge=start(command)
 try:
     while not stopping:
+        if usb.core.find(idVendor=0x2CA3,idProduct=0x4006) is None:
+            print('USB module disconnected; restarting runtime',flush=True)
+            break
         if any(p.poll() is not None for p in children):
             print('Runtime component stopped; restart required',flush=True)
             break

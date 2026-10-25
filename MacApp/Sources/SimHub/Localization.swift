@@ -21,7 +21,7 @@ import Foundation
     Localization.entries[candidate] != nil
     ? candidate
     : Localization.entries.first(where: { $0.value.values.contains(candidate) })?.key ?? candidate
-  let language = UserDefaults.standard.string(forKey: "clientLanguage") ?? "zh-Hans"
+  let language = ClientLanguage.current()
   return language == "zh-Hans" ? source : Localization.entries[source]?[language] ?? source
 }
 

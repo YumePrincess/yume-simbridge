@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+process.chdir(fileURLToPath(new URL('../../',import.meta.url)));
 import fs from 'node:fs/promises';
 import {cf} from './cloudflare.mjs';
 const zone='9a3ba262e1b341a7a3f2b8f18d62c9b1';

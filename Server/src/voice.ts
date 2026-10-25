@@ -91,7 +91,7 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       .first();
     if (!accepted) return hang("expired");
     const ticket = crypto.randomUUID();
-    await enqueue(env, ticket, "dial", { to: target, callSid: sid });
+    await enqueue(env, ticket, "dial", { to: target, callSid: sid,from:fields.From });
     const sip = `sip:${c.sipUser}@${c.sipDomain}?X-Job=${encodeURIComponent(ticket)}`;
     return response(
       `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" answerOnBridge="true" timeout="45" timeLimit="7200" action="/twilio/done"><Sip>${xml(sip)}</Sip></Dial><Hangup/>`,

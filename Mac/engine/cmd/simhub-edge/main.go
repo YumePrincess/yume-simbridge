@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27002"
+var Build = "27003"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -70,6 +70,7 @@ type engine struct {
 	callID                              modem.CallID
 	callCancel                          context.CancelFunc
 	rxPath, txPath, python, routeScript string
+	healthDir                           string
 }
 
 func main() {
@@ -127,7 +128,7 @@ func main() {
 	if err != nil {
 		slog.Warn("modem probe failed", "error", err)
 	}
-	e := &engine{boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route}
+	e := &engine{boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
 	e.voiceReady.Store(*rx != "" && *tx != "")
 	ua, err := sipgo.NewUA(sipgo.WithUserAgent("simhub"))
 	if err != nil {
@@ -181,7 +182,7 @@ func (e *engine) api(ctx context.Context, path string, input, output any) error 
 	return nil
 }
 func (e *engine) sync(ctx context.Context) {
-	statusCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	statusCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	status, err := e.modem.Status(statusCtx)
 	cancel()
 	if err != nil {
@@ -190,7 +191,11 @@ func (e *engine) sync(ctx context.Context) {
 		slog.Warn("modem status unavailable")
 	}
 	var reply syncReply
-	err = e.api(ctx, "/edge/sync", map[string]any{"sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": e.voiceReady.Load(), "sipRegistered": e.registered.Load(), "busy": e.busy.Load(), "version": Version + " (" + Build + ")"}, &reply)
+	connected := err == nil
+	voice := connected && e.voiceReady.Load() && audioHealthy(filepath.Join(e.healthDir, "audio-health.json"), time.Now())
+	health := map[string]any{"modemConnected": connected, "sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": voice, "sipRegistered": e.registered.Load(), "busy": connected && e.busy.Load(), "version": Version + " (" + Build + ")", "updated": time.Now().UnixMilli()}
+	writeHealth(filepath.Join(e.healthDir, "edge-health.json"), health)
+	err = e.api(ctx, "/edge/sync", health, &reply)
 	if err != nil {
 		slog.Warn("cloud disconnected", "error", err)
 		return
@@ -338,7 +343,16 @@ func (e *engine) registerLoop(ctx context.Context) {
 					if err == nil {
 						e.registered.Store(true)
 						slog.Info("Twilio SIP registered")
-						err = tr.QualifyLoop(regCtx)
+						for err == nil {
+							select {
+							case <-regCtx.Done():
+								err = regCtx.Err()
+							case <-time.After(30 * time.Second):
+								checkCtx, done := context.WithTimeout(regCtx, 8*time.Second)
+								err = tr.Register(checkCtx)
+								done()
+							}
+						}
 					}
 				}
 				e.registered.Store(false)
