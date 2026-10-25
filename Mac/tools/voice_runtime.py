@@ -3,7 +3,7 @@
 DjiPhone 模块侧语音运行时管理。
 
 将 MaVo/DJOneHub 的 ADB 语音路由流程移植为 Python：
-1. 通过模块 ADB 接口（interface 6 / subclass 0x42）推送语音运行时组件；
+1. 通过模块 ADB 接口（按 VID/PID 与 ff/42/01 接口描述符识别）推送语音运行时组件；
 2. insmod qdc507 内核声卡驱动，启动 alsaucm VoLTE 校准；
 3. 运行 mavo-pcm-bridge 建立 D4/UAC 语音路由，使 USB 音频承载真实通话语音。
 
@@ -91,41 +91,42 @@ class ADBClient:
         self._open_device()
 
     def _open_device(self):
-        dev = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
-        if dev is None:
-            dev = usb.core.find(idVendor=ALT_VENDOR_ID, idProduct=ALT_PRODUCT_ID)
-        if dev is None:
-            raise ADBError('未找到 DJI/Quectel USB 模块 (2ca3:4006)')
-        cfg = dev.get_active_configuration()
-        target = None
-        for intf in cfg:  # 每个 intf 是一个 altsetting 描述符
-            try:
-                num = intf.bInterfaceNumber
-                sub = intf.bInterfaceSubClass
-            except AttributeError:
-                continue
-            if num != 6 and sub != 66:
-                continue
-            ep_in = ep_out = None
-            for ep in intf:
-                if (ep.bmAttributes & 0x03) != 2:  # bulk
-                    continue
-                if ep.bEndpointAddress & 0x80:
-                    ep_in = ep.bEndpointAddress
-                else:
-                    ep_out = ep.bEndpointAddress
-            if ep_in is not None and ep_out is not None:
-                target = (num, ep_in, ep_out)
-                break
-        if not target:
-            raise ADBError('模块上没有找到 ADB 接口（interface 6 / subclass 0x42）')
-        iface, ep_in, ep_out = target
+        # Filter by the module IDs BEFORE inspecting interfaces. Never attach to
+        # the first generic ADB device (phones may be connected concurrently).
+        candidates = []
+        for vendor, product in [(VENDOR_ID, PRODUCT_ID), (ALT_VENDOR_ID, ALT_PRODUCT_ID)]:
+            for dev in usb.core.find(find_all=True, idVendor=vendor, idProduct=product):
+                for intf in dev.get_active_configuration():
+                    # Enabling USB audio moves ADB from interface 6 to 5. The
+                    # interface number alone can now identify the audio device!
+                    if (intf.bInterfaceClass, intf.bInterfaceSubClass,
+                            intf.bInterfaceProtocol) != (0xFF, 0x42, 0x01):
+                        continue
+                    ep_in = ep_out = None
+                    for ep in intf:
+                        if (ep.bmAttributes & 0x03) != 2:
+                            continue
+                        if ep.bEndpointAddress & 0x80:
+                            ep_in = ep.bEndpointAddress
+                        else:
+                            ep_out = ep.bEndpointAddress
+                    if ep_in is not None and ep_out is not None:
+                        candidates.append((dev, intf.bInterfaceNumber, ep_in, ep_out))
+        if not candidates:
+            raise ADBError('未找到 DJI/Quectel 模块的 USB ADB 接口（2ca3:4006 / 2c7c:0125，ff/42/01）')
+        if len(candidates) != 1:
+            raise ADBError('发现多个 DJI/Quectel 模块 ADB 接口；为避免误操作，请仅连接一个 SIM Hub 模块')
+        dev, iface, ep_in, ep_out = candidates[0]
         try:
             if dev.is_kernel_driver_active(iface):
                 dev.detach_kernel_driver(iface)
         except Exception:
             pass
-        usb.util.claim_interface(dev, iface)
+        try:
+            usb.util.claim_interface(dev, iface)
+        except usb.core.USBError as e:
+            usb.util.dispose_resources(dev)
+            raise ADBError(f'无法占用 DJI 模块 ADB 接口 {iface}，可能被其他 ADB 程序占用或无访问权限；请仅释放该模块的连接，其他设备无需断开') from e
         self.dev = dev
         self.iface = iface
         self.ep_in = ep_in
