@@ -16,3 +16,7 @@
 - Do not add a menu-bar status item. Closing the main window must keep the app and service alive in the Dock; quit must stop the owned runtime before the app exits.
 
 - A fresh Python route-reset process must inspect the actual owned module helper; never use in-memory ready=False to skip cleanup. Email authentication must verify original aligned DKIM signatures rather than trusting Authentication-Results header text.
+
+- Release Apps must be self-contained: bundled Python, pyusb, libusb and CA certificates. Installed runtime code must never depend on the source checkout, Homebrew or a venv on another disk.
+- Preserve the persistent local signing identity under Application Support/YumeSimHub/Signing for developer builds. Its private build-only keychain is never opened by the running App or in-app updater; do not add it to the user's keychain search list or trust roots.
+- App updates install a user-selected signed ZIP and require a newer Build plus the current certificate requirement. Publish both the first-install DMG and update ZIP with SHA-256 checksums.

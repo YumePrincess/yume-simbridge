@@ -1,0 +1,14 @@
+{
+  "pythonVersion": "3.12.15",
+  "release": "20261021",
+  "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.12.15%2B20261021-aarch64-apple-darwin-install_only_stripped.tar.gz",
+  "sha256": "7b8d00b751db21cea87dc551a8f8165147c5fbc5251d5537d7e5497dde00a219",
+  "pyusb": "1.3.1",
+  "certifi": "2026.10.23",
+  "libusb": {
+    "version": "1.0.30",
+    "sha256": "42b67be1c1f19c90144cc398773b0aae9060e70998e77b3f997660a1ee02221b",
+    "source": "https://github.com/libusb/libusb/tree/v1.0.30",
+    "license": "LGPL-2.1-or-later"
+  }
+}

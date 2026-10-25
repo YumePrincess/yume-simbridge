@@ -121,15 +121,6 @@ struct Bootstrap: Codable {
         break
       }
     }
-    if token.isEmpty,
-      let resource = Bundle.main.resourceURL?.appendingPathComponent("installation.json"),
-      let data = try? Data(contentsOf: resource),
-      let install = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-      let path = install["bootstrap"],
-      let boot = try? CredentialStore.read(URL(fileURLWithPath: path))
-    {
-      token = boot.token
-    }
     if !token.isEmpty
       && !FileManager.default.fileExists(
         atPath: folder.appendingPathComponent("credentials.json").path)
@@ -154,87 +145,80 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27006")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27007")"
+  }
+  @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
+  func openReleasePage() {
+    if let url = URL(string: releaseURL) { NSWorkspace.shared.open(url) }
   }
   func setup(_ mode: String) async {
-    guard !setupBusy else { return }
+    guard !setupBusy, let resources = Bundle.main.resourceURL else { return }
     setupBusy = true
-    defer {
-      setupBusy = false
-      setupTimer?.invalidate()
-      setupTimer = nil
-    }
-    let wasRunning = running
-    if ["--install", "--update"].contains(mode) {
-      stop(persist: false)
-      for _ in 0..<60 {
-        if !running { break }
-        try? await Task.sleep(for: .milliseconds(250))
-      }
-      guard !running else {
-        setupLog = L("模块服务仍在退出，请稍后重试")
-        return
-      }
-    }
+    defer { setupBusy = false }
     do {
-      guard let r = Bundle.main.resourceURL,
-        let install = try JSONSerialization.jsonObject(
-          with: Data(contentsOf: r.appendingPathComponent("installation.json")))
-          as? [String: String], let configuredRoot = install["sourceRoot"]
-      else {
-        throw NSError(
-          domain: "SimHub", code: 7,
-          userInfo: [NSLocalizedDescriptionKey: L("找不到项目路径，请从源项目重新构建客户端")])
-      }
-      try FileManager.default.createDirectory(
-        at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-      let root = configuredRoot.replacingOccurrences(of: "$APP_SUPPORT", with: folder.path)
-      let logURL = folder.appendingPathComponent("setup.log")
-      try Data().write(to: logURL)
-      let out = try FileHandle(forWritingTo: logURL)
-      defer { try? out.close() }
-      let p = Process()
-      p.executableURL = URL(fileURLWithPath: "/bin/bash")
-      if FileManager.default.fileExists(atPath: root + "/scripts/install-mac.sh") {
-        p.arguments = [root + "/scripts/install-mac.sh", mode]
-        p.currentDirectoryURL = URL(fileURLWithPath: root)
-      } else {
-        p.arguments = [r.appendingPathComponent("bootstrap-mac.sh").path, root, mode]
-      }
-      p.standardOutput = out
-      p.standardError = out
-      p.environment = ProcessInfo.processInfo.environment.merging([
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "SIMHUB_INSTALL_DEST": Bundle.main.bundleURL.path,
-      ]) { _, new in new }
-      setupProcess = p
-      setupTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-        Task { @MainActor in
-          if let d = try? Data(contentsOf: logURL) {
-            self?.setupLog = String(decoding: d.suffix(25000), as: UTF8.self)
-          }
+      switch mode {
+      case "--check":
+        setupLog = try await BundledRuntime.run(
+          resources: resources,
+          arguments: [
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); import usb_backend, certifi; assert usb_backend.backend is not None; print('Python / pyusb / libusb / TLS certificates: OK')",
+            resources.appendingPathComponent("Mac/tools").path,
+          ])
+        UserDefaults.standard.set(true, forKey: "setupCompleted")
+      case "--check-update":
+        let release = try JSONDecoder().decode(
+          ClientRelease.self, from: await request("/edge/release"))
+        guard release.url.hasPrefix("https://github.com/YumePrincess/yume-simhub/releases/") else {
+          throw CocoaError(.fileReadCorruptFile)
         }
-      }
-      let status: Int32 = try await withCheckedThrowingContinuation { continuation in
-        p.terminationHandler = { p in continuation.resume(returning: p.terminationStatus) }
-        do { try p.run() } catch { continuation.resume(throwing: error) }
-      }
-      setupProcess = nil
-      if let d = try? Data(contentsOf: logURL) {
-        setupLog = String(decoding: d.suffix(25000), as: UTF8.self)
-      }
-      if status == 0 {
-        if mode == "--check" || mode == "--install" || mode == "--update" {
-          UserDefaults.standard.set(true, forKey: "setupCompleted")
+        releaseURL = release.url
+        let current = Int(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0") ?? 0
+        setupLog =
+          release.build > current
+          ? L("发现新版本，请打开下载页获取更新 ZIP。") + "\n\(release.version) · Build \(release.build)"
+          : L("当前已是最新版本。")
+      case "--update":
+        guard edge.busy != true else {
+          setupLog = L("请先结束通话，再安装更新。")
+          return
         }
-        if ["--install", "--update"].contains(mode) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.zip]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = L("请选择从 GitHub Release 下载的更新 ZIP。")
+        guard panel.runModal() == .OK, let archive = panel.url else { return }
+        let scoped = archive.startAccessingSecurityScopedResource()
+        defer { if scoped { archive.stopAccessingSecurityScopedResource() } }
+        guard let signer = Bundle.main.infoDictionary?["SIMHubSignerFingerprint"] as? String else {
+          throw CocoaError(.fileReadCorruptFile)
+        }
+        let wasRunning = running
+        stop(persist: false)
+        for _ in 0..<80 {
+          if !running { break }
+          try? await Task.sleep(for: .milliseconds(250))
+        }
+        guard !running else {
+          setupLog = L("模块服务仍在退出，请稍后重试")
+          return
+        }
+        do {
+          setupLog = try await BundledRuntime.run(
+            resources: resources,
+            arguments: [
+              resources.appendingPathComponent("Mac/tools/install_update.py").path, "--archive",
+              archive.path, "--destination", Bundle.main.bundleURL.path, "--signer", signer,
+              "--current-build", Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0",
+            ])
           needsRelaunch = true
           UserDefaults.standard.set(wasRunning, forKey: "autoRun")
+        } catch {
+          if wasRunning { start() }
+          throw error
         }
-      } else {
-        setupLog +=
-          "\n" + L("操作未完成（退出码 %@），可根据日志修复后重试。").replacingOccurrences(of: "%@", with: String(status))
+      default: break
       }
     } catch { setupLog = error.localizedDescription }
   }
@@ -244,9 +228,7 @@ struct Bootstrap: Codable {
     p.arguments = [
       "-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 0.2; done; /usr/bin/open \"$2\"",
       "simhub-relaunch", String(ProcessInfo.processInfo.processIdentifier),
-      FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-        "Applications/Yume SIM Hub.app"
-      ).path,
+      Bundle.main.bundleURL.path,
     ]
     try? p.run()
     NSApp.terminate(nil)
@@ -357,13 +339,10 @@ struct Bootstrap: Codable {
     guard process == nil else { return }
     shouldRun = true
     do {
-      guard let resources = Bundle.main.resourceURL,
-        let install = try JSONSerialization.jsonObject(
-          with: Data(contentsOf: resources.appendingPathComponent("installation.json")))
-          as? [String: String], let python = install["python"]
-      else {
-        throw NSError(
-          domain: "SimHub", code: 4, userInfo: [NSLocalizedDescriptionKey: L("运行时安装配置缺失")])
+      guard let resources = Bundle.main.resourceURL else { throw CocoaError(.fileReadCorruptFile) }
+      let python = resources.appendingPathComponent("Python/bin/python3.12").path
+      guard FileManager.default.isExecutableFile(atPath: python) else {
+        throw CocoaError(.fileNoSuchFile)
       }
       try FileManager.default.createDirectory(
         at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -385,16 +364,14 @@ struct Bootstrap: Codable {
       try logFile.seekToEnd()
       let p = Process()
       p.executableURL = URL(
-        fileURLWithPath: python.replacingOccurrences(of: "$APP_SUPPORT", with: folder.path))
+        fileURLWithPath: python)
       p.arguments = [
-        "-u", resources.appendingPathComponent("Mac/supervisor.py").path, "--config", cfg.path,
+        "-s", "-B", "-u", resources.appendingPathComponent("Mac/supervisor.py").path, "--config",
+        cfg.path,
         "--data", folder.appendingPathComponent("runtime").path,
       ]
-      p.environment = ProcessInfo.processInfo.environment.merging([
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "SIMHUB_INSTALL_DEST": Bundle.main.bundleURL.path,
-      ]) { _, new in new }
+      p.currentDirectoryURL = resources
+      p.environment = BundledRuntime.environment(resources: resources)
       p.standardOutput = logFile
       p.standardError = logFile
       p.terminationHandler = { [weak self] _ in
@@ -444,8 +421,10 @@ struct Bootstrap: Codable {
       throw NSError(
         domain: "SimHub", code: 5, userInfo: [NSLocalizedDescriptionKey: L("录音尚未归档或下载失败")])
     }
-    let target = FileManager.default.temporaryDirectory.appendingPathComponent(
-      UUID().uuidString + ".mp3")
+    let cache = folder.appendingPathComponent("Playback", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: cache, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let target = cache.appendingPathComponent(UUID().uuidString + ".mp3")
     try FileManager.default.moveItem(at: url, to: target)
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
     return target
@@ -739,21 +718,21 @@ struct Content: View {
         Text(L("安装与更新向导")).font(.title.bold())
         Text(model.versionLabel).foregroundStyle(.secondary)
         Picker(L("客户端语言"), selection: $model.language) { languageOptions }
-        Text(L("① 检测系统与依赖  →  ② 安装运行环境  →  ③ 检查 GitHub 更新  →  ④ 安装并重启")).font(.callout)
+        Text(L("① 检查运行环境  →  ② 检查更新  →  ③ 下载更新包  →  ④ 安装并重启")).font(.callout)
         Text(
-          L("运行环境：Python 3.12 / pyusb / libusb；构建工具：Go / Xcode Command Line Tools。客户端不需要 Node.js。")
+          L("运行环境已包含在 App 内，无需安装开发工具。配置与运行数据仅保存在本机 Application Support。")
         )
         .font(.caption).foregroundStyle(.secondary)
         HStack {
-          Button(L("检测依赖")) { Task { await model.setup("--check") } }
-          Button(L("安装 / 修复依赖")) { Task { await model.setup("--install") } }
-          Button(L("检查项目更新")) { Task { await model.setup("--check-update") } }
-          Button(L("安装项目更新")) { Task { await model.setup("--update") } }
+          Button(L("检查运行环境")) { Task { await model.setup("--check") } }
+          Button(L("检查更新")) { Task { await model.setup("--check-update") } }
+          Button(L("打开下载页")) { model.openReleasePage() }
+          Button(L("安装已下载更新")) { Task { await model.setup("--update") } }
         }.disabled(model.setupBusy)
         if model.setupBusy { ProgressView(L("正在处理，请保持客户端打开…")) }
         ScrollView {
           Text(
-            model.setupLog.isEmpty ? L("请选择一个步骤开始。安装和更新会暂时停止模块服务，保留本机凭据与运行数据。") : model.setupLog
+            model.setupLog.isEmpty ? L("首次安装使用 DMG，应用内更新选择 ZIP。更新会校验签名并保留本机凭据与数据。") : model.setupLog
           )
           .font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(
             maxWidth: .infinity, alignment: .leading)

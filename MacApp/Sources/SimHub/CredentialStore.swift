@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 // Credentials survive replacement of the signed app bundle. No Keychain ACL
-// depends on the changing identity of an ad-hoc development signature.
+// is needed by the running application.
 enum CredentialStore {
   static func read(_ url: URL) throws -> Bootstrap {
     let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])

@@ -5,6 +5,7 @@ ROOT="$PWD"
 [ "$(uname -m)" = arm64 ] || { echo 'Apple Silicon is required'; exit 1; }
 [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 26 ] || { echo 'macOS 26 or later is required'; exit 1; }
 mkdir -p Mac/bin dist
+python3.12 scripts/prepare-runtime.py
 VERSION=$(python3 -c 'import json;print(json.load(open("version.json"))["version"])')
 BUILD=$(python3 - <<'PYBUILD'
 import json,plistlib,os
@@ -30,11 +31,18 @@ if [ -d "$APP" ]; then rm -rf "$APP"; fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Mac/bin" "$APP/Contents/Resources/Mac/tools"
 cp "$BIN/YumeSimHub" "$APP/Contents/MacOS/YumeSimHub"
 cp MacApp/Translations.json "$APP/Contents/Resources/Translations.json"
-cp scripts/bootstrap-mac.sh "$APP/Contents/Resources/bootstrap-mac.sh"
+python3 - "$ROOT" "$APP" <<'PYRUNTIME'
+import shutil,sys
+from pathlib import Path
+root,app=map(Path,sys.argv[1:])
+shutil.copytree(root/'Mac/runtime-cache/python',app/'Contents/Resources/Python',symlinks=False)
+PYRUNTIME
+cp Mac/runtime-cache/libusb-1.0.0.dylib "$APP/Contents/Resources/Mac/bin/"
+cp Mac/runtime-cache/libusb-LICENSE.txt "$APP/Contents/Resources/"
 cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
-cp Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
+cp Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
 if [ -d Mac/tools/voice-runtime ]; then cp -R Mac/tools/voice-runtime "$APP/Contents/Resources/Mac/tools/"; fi
 cp Mac/engine/LICENSE-CellBridge "$APP/Contents/Resources/"
 python3 - "$ROOT" "$APP" "$BUILD" <<'PY'
@@ -42,7 +50,7 @@ import json,sys,plistlib
 from pathlib import Path
 root,app=map(Path,sys.argv[1:3])
 effective_build=int(sys.argv[3])
-with (app/'Contents/Resources/installation.json').open('w') as f:json.dump({'python':str(root/'Mac/.venv/bin/python'),'bootstrap':str(root/'.secrets/edge.json'),'sourceRoot':str(root)},f)
+with (app/'Contents/Resources/installation.json').open('w') as f:json.dump({'python':'Python/bin/python3.12','standalone':True},f)
 version=json.loads((root/'version.json').read_text())
 translations=json.loads((root/'MacApp/Translations.json').read_text())
 for language in ['en','fr','ja','zh-Hans','zh-Hant']:
@@ -53,10 +61,12 @@ for language in ['en','fr','ja','zh-Hans','zh-Hant']:
         value=key if language=='zh-Hans' else values.get(language,key)
         rows.append(json.dumps(key,ensure_ascii=False)+' = '+json.dumps(value,ensure_ascii=False)+';')
     (directory/'Localizable.strings').write_text('\n'.join(rows)+'\n')
+    purpose={'en':'Reads DJI USB call audio to bridge phone calls.','fr':'Lit le son USB du module DJI pour relayer les appels.','ja':'DJI モジュールの USB 通話音声を読み取り、電話回線へ中継します。','zh-Hans':'读取 DJI 模块的 USB 通话音频，并桥接到电话网络。','zh-Hant':'讀取 DJI 模組的 USB 通話音訊，並橋接至電話網路。'}[language]
+    (directory/'InfoPlist.strings').write_text('"NSMicrophoneUsageDescription" = '+json.dumps(purpose,ensure_ascii=False)+';\n')
 
 with (app/'Contents/Info.plist').open('wb') as f:plistlib.dump({'CFBundleExecutable':'YumeSimHub','CFBundleIdentifier':'zone.yume.simhub','CFBundleName':'Yume SIM Hub','CFBundleIconFile':'AppIcon','CFBundleDisplayName':'Yume SIM Hub','CFBundlePackageType':'APPL','CFBundleShortVersionString':version['version'],'CFBundleVersion':str(effective_build),'LSMinimumSystemVersion':'26.0','LSArchitecturePriority':['arm64'],'LSRequiresNativeExecution':True,'CFBundleDevelopmentRegion':'en','CFBundleLocalizations':['en','fr','ja','zh-Hans','zh-Hant'],'NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'用于读取 DJI 模块的 USB 通话音频，并桥接到电话网络。'},f)
 PY
-codesign --force --deep --sign - "$APP"
+python3 scripts/sign-mac.py "$APP"
 if [ "${1:-}" = "--install" ]; then
  mkdir -p "$HOME/Applications"
  python3 scripts/install-app.py "$APP" "${SIMHUB_INSTALL_DEST:-$HOME/Applications/Yume SIM Hub.app}"

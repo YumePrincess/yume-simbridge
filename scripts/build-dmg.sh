@@ -41,9 +41,9 @@ ditto "${APP_BUNDLE}" "${STAGING}/${APP_NAME}"
 import json,sys
 from pathlib import Path
 p=Path(sys.argv[1])/'Contents/Resources/installation.json'
-p.write_text(json.dumps({'python':'$APP_SUPPORT/Source/Mac/.venv/bin/python','sourceRoot':'$APP_SUPPORT/Source'}))
+p.write_text(json.dumps({'python':'Python/bin/python3.12','standalone':True}))
 PYMANIFEST
-codesign --force --deep --sign - "${STAGING}/${APP_NAME}"
+"${PYTHON_BIN}" "${SCRIPT_DIR}/sign-mac.py" "${STAGING}/${APP_NAME}"
 codesign --verify --deep --strict "${STAGING}/${APP_NAME}"
 ln -s /Applications "${STAGING}/Applications"
 "${PYTHON_BIN}" "${SCRIPT_DIR}/build-dmg-background.py" "${STAGING}/.background/background.tiff"
@@ -65,4 +65,10 @@ FINAL_STAGING="$(mktemp "${DIST_ROOT}/.simhub-dmg.XXXXXX")"
 cp -X "${WORK_ROOT}/final.dmg" "${FINAL_STAGING}"
 mv -f -- "${FINAL_STAGING}" "${FINAL_IMAGE}"
 
+ZIP_IMAGE="${DIST_ROOT}/${RELEASE_LABEL}.zip"
+/usr/bin/ditto -c -k --norsrc --keepParent "${APP_BUNDLE}" "${WORK_ROOT}/update.zip"
+ZIP_STAGING="$(mktemp "${DIST_ROOT}/.simhub-update.XXXXXX")"
+cp -X "${WORK_ROOT}/update.zip" "${ZIP_STAGING}"
+mv -f "${ZIP_STAGING}" "${ZIP_IMAGE}"
 echo "Built ${FINAL_IMAGE}"
+echo "Built ${ZIP_IMAGE}"

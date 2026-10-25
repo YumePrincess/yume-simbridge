@@ -22,6 +22,7 @@ import sys
 import time
 import threading
 
+import usb_backend
 import usb.core
 import usb.util
 

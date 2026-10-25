@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27006"
+var Build = "27007"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -403,7 +403,7 @@ func (e *engine) resetRoute() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, e.python, e.routeScript)
+	cmd := exec.CommandContext(ctx, e.python, "-s", "-B", e.routeScript)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

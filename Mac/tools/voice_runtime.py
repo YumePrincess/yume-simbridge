@@ -17,6 +17,7 @@ import threading
 import time
 import urllib.request
 
+import usb_backend
 import usb.core
 import usb.util
 

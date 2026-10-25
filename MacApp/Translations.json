@@ -856,5 +856,71 @@
     "fr": "La signature de l’expéditeur doit être valide. Les tâches attendent si le Mac est hors ligne.",
     "ja": "送信者の署名検証が必要です。Mac がオフラインの場合は待機します。",
     "zh-Hant": "郵件須通過寄件者簽章驗證；Mac 離線時工作會排隊。"
+  },
+  "发现新版本，请打开下载页获取更新 ZIP。": {
+    "en": "An update is available. Open the download page for the update ZIP.",
+    "fr": "Une mise à jour est disponible. Ouvrez la page de téléchargement du ZIP.",
+    "ja": "更新があります。ダウンロードページから更新 ZIP を取得してください。",
+    "zh-Hant": "發現新版本，請開啟下載頁取得更新 ZIP。"
+  },
+  "当前已是最新版本。": {
+    "en": "You are up to date.",
+    "fr": "La version est à jour.",
+    "ja": "最新バージョンです。",
+    "zh-Hant": "目前已是最新版本。"
+  },
+  "请先结束通话，再安装更新。": {
+    "en": "End the current call before installing an update.",
+    "fr": "Terminez l’appel avant d’installer la mise à jour.",
+    "ja": "通話を終了してから更新してください。",
+    "zh-Hant": "請先結束通話，再安裝更新。"
+  },
+  "请选择从 GitHub Release 下载的更新 ZIP。": {
+    "en": "Choose the update ZIP downloaded from GitHub Releases.",
+    "fr": "Choisissez le ZIP téléchargé depuis GitHub Releases.",
+    "ja": "GitHub Releases からダウンロードした更新 ZIP を選択してください。",
+    "zh-Hant": "請選擇從 GitHub Release 下載的更新 ZIP。"
+  },
+  "① 检查运行环境  →  ② 检查更新  →  ③ 下载更新包  →  ④ 安装并重启": {
+    "en": "① Check runtime  →  ② Check updates  →  ③ Download  →  ④ Install and restart",
+    "fr": "① Vérifier l’environnement  →  ② Vérifier les mises à jour  →  ③ Télécharger  →  ④ Installer et redémarrer",
+    "ja": "① 実行環境を確認 → ② 更新を確認 → ③ ダウンロード → ④ インストールと再起動",
+    "zh-Hant": "① 檢查執行環境  →  ② 檢查更新  →  ③ 下載更新包  →  ④ 安裝並重新啟動"
+  },
+  "运行环境已包含在 App 内，无需安装开发工具。配置与运行数据仅保存在本机 Application Support。": {
+    "en": "The runtime is included in the app. No developer tools are needed. Settings and data stay in local Application Support.",
+    "fr": "L’environnement est inclus dans l’app, sans outils de développement. Réglages et données restent dans Application Support.",
+    "ja": "実行環境は App に内蔵され、開発ツールは不要です。設定とデータはこの Mac の Application Support に保存されます。",
+    "zh-Hant": "執行環境已包含在 App 內，無需安裝開發工具。設定與資料僅儲存在本機 Application Support。"
+  },
+  "检查运行环境": {
+    "en": "Check runtime",
+    "fr": "Vérifier l’environnement",
+    "ja": "実行環境を確認",
+    "zh-Hant": "檢查執行環境"
+  },
+  "检查更新": {
+    "en": "Check updates",
+    "fr": "Vérifier les mises à jour",
+    "ja": "更新を確認",
+    "zh-Hant": "檢查更新"
+  },
+  "打开下载页": {
+    "en": "Open download page",
+    "fr": "Ouvrir les téléchargements",
+    "ja": "ダウンロードページを開く",
+    "zh-Hant": "開啟下載頁"
+  },
+  "安装已下载更新": {
+    "en": "Install downloaded update",
+    "fr": "Installer la mise à jour téléchargée",
+    "ja": "ダウンロード済みの更新をインストール",
+    "zh-Hant": "安裝已下載更新"
+  },
+  "首次安装使用 DMG，应用内更新选择 ZIP。更新会校验签名并保留本机凭据与数据。": {
+    "en": "Use the DMG for first installation and the ZIP for in-app updates. Updates verify signatures and preserve credentials and data.",
+    "fr": "Utilisez le DMG pour l’installation initiale, le ZIP pour les mises à jour. La signature est vérifiée et les données sont conservées.",
+    "ja": "初回インストールは DMG、App 内の更新は ZIP を使用します。署名を検証し、認証情報とデータを保持します。",
+    "zh-Hant": "首次安裝使用 DMG，App 內更新選擇 ZIP。更新會驗證簽章並保留本機憑證與資料。"
   }
 }

@@ -1,5 +1,6 @@
 import { config, updateConfig, publicConfig } from "./config";
 import { equal, fail, HttpError, readBytes } from "./util";
+import release from "../../version.json";
 import { claimSMS, enqueue, event, limit, now, online } from "./store";
 import { voice } from "./voice";
 import { receive } from "./email";
@@ -31,6 +32,11 @@ async function edgeAPI(
     !equal(req.headers.get("Authorization") || "", "Bearer " + env.EDGE_TOKEN)
   )
     fail("Unauthorized", 401);
+  if (path === "/edge/release" && req.method === "GET")
+    return json({
+      ...release,
+      url: `https://github.com/YumePrincess/yume-simhub/releases/tag/v${release.version}-build.${release.build}`,
+    });
   if (path.startsWith("/edge/recordings/"))
     return recordingAPI(req, env, ctx, path);
   if (path === "/edge/recordings" && req.method === "GET")

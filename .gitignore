@@ -76,3 +76,5 @@ Server/node_modules/
 Server/.wrangler/
 Server/.dev.vars*
 Mac/.venv/
+
+Mac/runtime-cache/
