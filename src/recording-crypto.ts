@@ -1,4 +1,4 @@
-import {config} from './config';
+import { config } from "./config";
 import { createHash } from "node:crypto";
 import { b64, unb64, enc, fail } from "./util";
 export const CHUNK = 256 * 1024;
@@ -181,10 +181,7 @@ export async function archive(env: Env, rec: Recording): Promise<Recording> {
   };
 }
 export async function audio(req: Request, env: Env, rec: Recording) {
-  if (
-    rec.status !== "archived" ||
-    !rec.key.startsWith("simhub/recordings/")
-  )
+  if (rec.status !== "archived" || !rec.key.startsWith("simhub/recordings/"))
     fail("录音尚未归档", 409);
   let start = 0,
     end = rec.size - 1,

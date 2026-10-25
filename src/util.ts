@@ -68,7 +68,7 @@ export class TwilioError extends HttpError {
 }
 export async function signedWebhook(
   req: Request,
-  env: Env & {TWILIO_AUTH_TOKEN:string},
+  env: Env & { TWILIO_AUTH_TOKEN: string },
   fields: Record<string, string>,
 ) {
   if (fields.AccountSid !== env.TWILIO_ACCOUNT_SID) return false;

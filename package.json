@@ -1,1 +1,30 @@
-{"name":"yume-simhub","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"wrangler dev","types":"wrangler types","typecheck":"tsc --noEmit","test":"vitest run","build":"npm run typecheck && npm test","deploy":"wrangler d1 migrations apply DB --remote && wrangler deploy"},"dependencies":{"jose":"^6.2.13","postal-mime":"^2.6.0"},"devDependencies":{"@cloudflare/workers-types":"latest","@types/node":"latest","typescript":"latest","vitest":"latest","wrangler":"latest"}}
+{
+  "name": "yume-simhub",
+  "version": "27.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "npm run typecheck && npm test",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
+  },
+  "dependencies": {
+    "jose": "^6.2.13",
+    "postal-mime": "^2.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/node": "latest",
+    "prettier": "^3.9.10",
+    "typescript": "latest",
+    "vitest": "latest",
+    "wrangler": "latest"
+  },
+  "build": 27001,
+  "overrides": {
+    "undici": "^7.30.1"
+  }
+}

@@ -31,6 +31,9 @@ import (
 	"github.com/emiago/sipgo/sip"
 )
 
+var Version = "27.2.0"
+var Build = "27001"
+
 type bootstrap struct {
 	Origin string `json:"origin"`
 	Token  string `json:"token"`
@@ -187,7 +190,7 @@ func (e *engine) sync(ctx context.Context) {
 		slog.Warn("modem status unavailable")
 	}
 	var reply syncReply
-	err = e.api(ctx, "/edge/sync", map[string]any{"sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": e.voiceReady.Load(), "sipRegistered": e.registered.Load(), "busy": e.busy.Load(), "version": "0.1.0"}, &reply)
+	err = e.api(ctx, "/edge/sync", map[string]any{"sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": e.voiceReady.Load(), "sipRegistered": e.registered.Load(), "busy": e.busy.Load(), "version": Version + " (" + Build + ")"}, &reply)
 	if err != nil {
 		slog.Warn("cloud disconnected", "error", err)
 		return
