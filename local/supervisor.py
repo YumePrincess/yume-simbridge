@@ -8,6 +8,9 @@ import signal
 import subprocess
 import sys
 import time
+import shutil
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"]="1"
 
 parser=argparse.ArgumentParser()
 parser.add_argument('--config',required=True)
@@ -44,6 +47,12 @@ import usb.core
 for _ in range(90):
     if usb.core.find(idVendor=0x2CA3,idProduct=0x4006) is not None:break
     time.sleep(1)
+cache=data/'module-runtime'
+cache.mkdir(mode=0o700,exist_ok=True)
+os.environ['SIMHUB_VOICE_RUNTIME']=str(cache)
+for asset in (root/'tools/voice-runtime').glob('*'):
+    if asset.is_file() and not (cache/asset.name).exists():
+        shutil.copy2(asset,cache/asset.name)
 sys.path.insert(0,str(root/'tools'))
 import voice_runtime
 voice=False

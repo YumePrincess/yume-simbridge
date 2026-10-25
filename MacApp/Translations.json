@@ -257,12 +257,6 @@
     "ja": "ウインドウを閉じても動作します。アプリを終了するとサービスを停止します。実行中は自動スリープを防ぎます。",
     "zh-Hant": "關閉視窗會繼續執行；結束用戶端會停止模組服務。執行時防止 Mac 自動睡眠。"
   },
-  "客户端凭据（保存在钥匙串）": {
-    "en": "Client credential (stored in Keychain)",
-    "fr": "Identifiant du client (dans le trousseau)",
-    "ja": "クライアント認証情報（キーチェーン保存）",
-    "zh-Hant": "用戶端憑證（儲存在鑰匙圈）"
-  },
   "保存客户端凭据": {
     "en": "Save client credential",
     "fr": "Enregistrer l’identifiant",
@@ -340,12 +334,6 @@
     "fr": "En cours. Gardez le client ouvert…",
     "ja": "処理中です。アプリを開いたままにしてください…",
     "zh-Hant": "正在處理，請保持用戶端開啟…"
-  },
-  "请选择一个步骤开始。安装和更新会暂时停止模块服务，保留钥匙串凭据与运行数据。": {
-    "en": "Choose a step to begin. Install and update temporarily stop the service and preserve credentials and data.",
-    "fr": "Choisissez une étape. Installation et mise à jour arrêtent temporairement le service et préservent identifiants et données.",
-    "ja": "手順を選んでください。インストールと更新中はサービスを停止し、認証情報とデータを保持します。",
-    "zh-Hant": "請選擇一個步驟。安裝與更新會暫停模組服務，並保留鑰匙圈憑證及執行資料。"
   },
   "关闭": {
     "en": "Close",
@@ -538,12 +526,6 @@
     "fr": "Nouvel envoi programmé",
     "ja": "通知の再試行を予約しました",
     "zh-Hant": "已安排重試推播"
-  },
-  "客户端凭据已保存到钥匙串": {
-    "en": "Credential saved to Keychain",
-    "fr": "Identifiant enregistré dans le trousseau",
-    "ja": "認証情報をキーチェーンに保存しました",
-    "zh-Hant": "用戶端憑證已儲存到鑰匙圈"
   },
   "客户端凭据格式不正确": {
     "en": "Invalid client credential",
@@ -808,5 +790,23 @@
     "fr": "Mise à jour du projet disponible",
     "ja": "プロジェクトの更新があります",
     "zh-Hant": "發現專案更新，可安裝更新"
+  },
+  "客户端凭据已保存到本机受限配置": {
+    "en": "Credential saved to protected local config",
+    "fr": "Identifiant enregistré dans la configuration locale protégée",
+    "ja": "認証情報を保護されたローカル設定に保存しました",
+    "zh-Hant": "用戶端憑證已儲存到受保護的本機設定"
+  },
+  "客户端凭据（保存在本机受限配置）": {
+    "en": "Client credential (stored in protected local config)",
+    "fr": "Identifiant du client (dans la configuration locale protégée)",
+    "ja": "クライアント認証情報（保護されたローカル設定保存）",
+    "zh-Hant": "用戶端憑證（儲存在受保護的本機設定）"
+  },
+  "请选择一个步骤开始。安装和更新会暂时停止模块服务，保留本机凭据与运行数据。": {
+    "en": "Choose a step to begin. Install and update temporarily stop the service and preserve credentials and data.",
+    "fr": "Choisissez une étape. Installation et mise à jour arrêtent temporairement le service et préservent identifiants et données.",
+    "ja": "手順を選んでください。インストールと更新中はサービスを停止し、認証情報とデータを保持します。",
+    "zh-Hant": "請選擇一個步驟。安裝與更新會暫停模組服務，並保留受保護的本機設定憑證及執行資料。"
   }
 }

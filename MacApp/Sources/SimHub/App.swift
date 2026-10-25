@@ -1,6 +1,5 @@
 import AVFoundation
 import AppKit
-import Security
 import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
@@ -67,34 +66,6 @@ struct Bootstrap: Codable {
   var origin: String
   var token: String
 }
-@MainActor enum Vault {
-  static let key: [String: Any] = [
-    kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "zone.yume.simhub",
-    kSecAttrAccount as String: "edge",
-  ]
-  static func read() -> String? {
-    var q = key
-    q[kSecReturnData as String] = true
-    q[kSecMatchLimit as String] = kSecMatchLimitOne
-    var item: CFTypeRef?
-    guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data
-    else { return nil }
-    return String(data: data, encoding: .utf8)
-  }
-  static func save(_ value: String) throws {
-    var q = key
-    q[kSecValueData as String] = Data(value.utf8)
-    q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-    let status = SecItemAdd(q as CFDictionary, nil)
-    if status == errSecDuplicateItem {
-      let s = SecItemUpdate(
-        key as CFDictionary, [kSecValueData as String: Data(value.utf8)] as CFDictionary)
-      guard s == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(s)) }
-    } else if status != errSecSuccess {
-      throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
-    }
-  }
-}
 @MainActor final class Model: ObservableObject {
   @Published var language = UserDefaults.standard.string(forKey: "clientLanguage") ?? "zh-Hans" {
     didSet { UserDefaults.standard.set(language, forKey: "clientLanguage") }
@@ -135,19 +106,30 @@ struct Bootstrap: Codable {
     for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(
       "YumeSimHub", isDirectory: true)
   init() {
-    token = Vault.read() ?? ""
+    for path in [
+      folder.appendingPathComponent("credentials.json"), folder.appendingPathComponent("edge.json"),
+    ] {
+      if let boot = try? CredentialStore.read(path) {
+        token = boot.token
+        break
+      }
+    }
     if token.isEmpty,
       let resource = Bundle.main.resourceURL?.appendingPathComponent("installation.json"),
       let data = try? Data(contentsOf: resource),
       let install = try? JSONSerialization.jsonObject(with: data) as? [String: String],
       let path = install["bootstrap"],
-      let bootData = try? Data(contentsOf: URL(fileURLWithPath: path)),
-      let boot = try? JSONDecoder().decode(Bootstrap.self, from: bootData)
+      let boot = try? CredentialStore.read(URL(fileURLWithPath: path))
     {
-      do {
-        try Vault.save(boot.token)
-        token = boot.token
-      } catch { notice = L("无法保存钥匙串凭据：") + error.localizedDescription }
+      token = boot.token
+    }
+    if !token.isEmpty
+      && !FileManager.default.fileExists(
+        atPath: folder.appendingPathComponent("credentials.json").path)
+    {
+      do { try CredentialStore.save(Bootstrap(origin: base, token: token), folder: folder) } catch {
+        notice = error.localizedDescription
+      }
     }
     showSetup = !UserDefaults.standard.bool(forKey: "setupCompleted")
     loginItem = SMAppService.mainApp.status == .enabled
@@ -162,7 +144,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27001")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27002")"
   }
   func setup(_ mode: String) async {
     guard !setupBusy else { return }
@@ -209,7 +191,8 @@ struct Bootstrap: Codable {
       p.standardOutput = out
       p.standardError = out
       p.environment = ProcessInfo.processInfo.environment.merging([
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONDONTWRITEBYTECODE": "1",
       ]) { _, new in new }
       setupProcess = p
       setupTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -323,12 +306,12 @@ struct Bootstrap: Codable {
         throw NSError(
           domain: "SimHub", code: 3, userInfo: [NSLocalizedDescriptionKey: L("客户端凭据格式不正确")])
       }
-      try Vault.save(t)
+      try CredentialStore.save(Bootstrap(origin: base, token: t), folder: folder)
       token = t
       accessToken = ""
       loaded = false
       Task { await refresh() }
-      notice = L("客户端凭据已保存到钥匙串")
+      notice = L("客户端凭据已保存到本机受限配置")
     } catch { notice = error.localizedDescription }
   }
   func setLoginItem(_ enabled: Bool) {
@@ -378,7 +361,8 @@ struct Bootstrap: Codable {
         "--data", folder.appendingPathComponent("runtime").path,
       ]
       p.environment = ProcessInfo.processInfo.environment.merging([
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONDONTWRITEBYTECODE": "1",
       ]) { _, new in new }
       p.standardOutput = logFile
       p.standardError = logFile
@@ -531,6 +515,13 @@ struct Bootstrap: Codable {
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   var model: Model?
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+      let icon = NSImage(contentsOf: url)
+    {
+      NSApp.applicationIconImage = icon
+    }
+  }
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     model?.stopPlayback()
     model?.stop(persist: false)
@@ -691,7 +682,7 @@ struct Content: View {
               isOn: Binding(get: { model.loginItem }, set: { model.setLoginItem($0) })
             )
             Text(L("关闭窗口会继续运行；退出客户端会停止模块服务。运行时防止 Mac 自动睡眠。")).font(.caption)
-            SecureField(L("客户端凭据（保存在钥匙串）"), text: $model.accessToken)
+            SecureField(L("客户端凭据（保存在本机受限配置）"), text: $model.accessToken)
             Button(L("保存客户端凭据")) { model.importToken() }
           }
           Section(L("运行日志")) {
@@ -729,7 +720,7 @@ struct Content: View {
         if model.setupBusy { ProgressView(L("正在处理，请保持客户端打开…")) }
         ScrollView {
           Text(
-            model.setupLog.isEmpty ? L("请选择一个步骤开始。安装和更新会暂时停止模块服务，保留钥匙串凭据与运行数据。") : model.setupLog
+            model.setupLog.isEmpty ? L("请选择一个步骤开始。安装和更新会暂时停止模块服务，保留本机凭据与运行数据。") : model.setupLog
           )
           .font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(
             maxWidth: .infinity, alignment: .leading)

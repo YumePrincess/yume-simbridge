@@ -58,13 +58,20 @@ export async function notify(env: Env) {
           extras: { "client::display": { contentType: "text/plain" } },
         }),
         signal: AbortSignal.timeout(10000),
-        redirect: "error",
+        redirect: "manual",
       });
       delivered = r.ok;
       if (!r.ok) error = "Gotify HTTP " + r.status;
       await r.body?.cancel();
-    } catch {
-      error = "Gotify request failed";
+    } catch (e) {
+      error =
+        e instanceof Error
+          ? (
+              e.name +
+              ": " +
+              e.message.replaceAll(c.gotifyToken, "[redacted]")
+            ).slice(0, 200)
+          : "Gotify request failed";
     }
     await env.DB.prepare(
       "UPDATE events SET notified=?,last_error=?,delivery_updated=? WHERE id=?",

@@ -55,7 +55,7 @@ ROUTE_LOG_FILE = '/run/mavo-voice-route.log'
 CALIB_PID_FILE = '/run/mavo-alsaucm.pid'
 CALIB_LOG_FILE = '/run/mavo-alsaucm.log'
 
-RUNTIME_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice-runtime')
+RUNTIME_DIR = os.environ.get('SIMHUB_VOICE_RUNTIME') or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice-runtime')
 
 _state = {
     'lock': threading.Lock(),
