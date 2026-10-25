@@ -31,7 +31,22 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
   }
   const sid = fields.CallSid || "";
   if (!/^CA[a-f0-9]{32}$/.test(sid)) fail("Invalid call", 400);
-  if (path === "/twilio/done") return response("<Hangup/>");
+  if (path === "/twilio/done" || path === "/twilio/forward-done") {
+    // A completed leg includes normal hangup and answered voicemail. Never
+    // announce failure after an established conversation.
+    if (
+      ["busy", "no-answer", "failed", "canceled"].includes(
+        fields.DialCallStatus || "",
+      )
+    ) {
+      const unavailable =
+        path === "/twilio/forward-done"
+          ? '<Say voice="Polly.Zhiyu" language="cmn-CN">您拨打的电话暂时无法接通，请稍后重试。</Say><Say voice="Polly.Joanna" language="en-US">The number you have dialed is temporarily unavailable. Please try again later.</Say>'
+          : say("unavailable");
+      return response(unavailable + "<Hangup/>");
+    }
+    return response("<Hangup/>");
+  }
   if (path === "/twilio/cellular") {
     if (!c.inboundEnabled || !fields.From?.startsWith("sip:"))
       return hang("offline");
@@ -43,7 +58,7 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       .first();
     if (!job) return hang("expired");
     return response(
-      `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" callerId="${xml(env.TWILIO_NUMBER)}" timeout="30" timeLimit="7200" action="/twilio/done"><Number>${xml(c.forwardTo)}</Number></Dial><Hangup/>`,
+      `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" callerId="${xml(env.TWILIO_NUMBER)}" timeout="30" timeLimit="7200" action="/twilio/forward-done"><Number>${xml(c.forwardTo)}</Number></Dial><Hangup/>`,
     );
   }
   if (!c.outboundEnabled || !c.pinHash) return hang("disabled");
@@ -91,10 +106,14 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       .first();
     if (!accepted) return hang("expired");
     const ticket = crypto.randomUUID();
-    await enqueue(env, ticket, "dial", { to: target, callSid: sid,from:fields.From });
+    await enqueue(env, ticket, "dial", {
+      to: target,
+      callSid: sid,
+      from: fields.From,
+    });
     const sip = `sip:${c.sipUser}@${c.sipDomain}?X-Job=${encodeURIComponent(ticket)}`;
     return response(
-      `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" answerOnBridge="true" timeout="45" timeLimit="7200" action="/twilio/done"><Sip>${xml(sip)}</Sip></Dial><Hangup/>`,
+      `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" answerOnBridge="true" timeout="120" timeLimit="7200" action="/twilio/done"><Sip>${xml(sip)}</Sip></Dial><Hangup/>`,
     );
   }
   return new Response("Not found", { status: 404 });

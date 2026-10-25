@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27007"
+var Build = "27008"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -510,8 +510,28 @@ func (e *engine) outgoing(d *diago.DialogServerSession) {
 		return
 	}
 	e.setCall(id, cancel)
-	_ = d.Ringing()
-	activeCtx, stop := context.WithTimeout(ctx, 40*time.Second)
+	// Establish RTP with 183 before CLCC becomes active: carrier ringback and
+	// failure announcements are often early media, never an answered call.
+	med, err := d.ProgressMedia(diago.ProgressMediaOptions{RTPNAT: media.RTPNATSymetric})
+	if err != nil {
+		if med != nil {
+			_ = med.Close()
+		}
+		_ = d.Respond(503, "Media unavailable", nil)
+		e.callEvent(ticket, "failed")
+		return
+	}
+	defer med.Close()
+	bridgeCtx, stopBridge := context.WithCancel(ctx)
+	bridgeDone := make(chan struct{})
+	go func() {
+		defer close(bridgeDone)
+		_ = e.bridge(bridgeCtx, d.Context(), med, id)
+		// A broken audio path must not leave CLCC polling or the SIM call alive.
+		cancel()
+	}()
+	defer func() { stopBridge(); <-bridgeDone }()
+	activeCtx, stop := context.WithTimeout(ctx, 110*time.Second)
 	ok, err := e.modem.WaitActive(activeCtx)
 	stop()
 	if err != nil || !ok {
@@ -519,14 +539,14 @@ func (e *engine) outgoing(d *diago.DialogServerSession) {
 		e.callEvent(ticket, "failed")
 		return
 	}
-	med, err := d.Answer(diago.AnswerOptions{RTPNAT: media.RTPNATSymetric})
-	if err != nil {
+	// Promote the SAME RTP session, preserving audio across 183 -> 200.
+	if err = d.AnswerEarlyMedia(med, diago.AnswerOptions{}); err != nil {
+		e.callEvent(ticket, "failed")
 		return
 	}
-	defer med.Close()
 	defer hangup(d)
 	e.callEvent(ticket, "connected")
-	_ = e.bridge(ctx, d.Context(), med, id)
+	<-bridgeDone
 	e.callEvent(ticket, "ended")
 }
 
@@ -556,6 +576,11 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 		return err
 	}
 	defer tx.Close()
+	// Twilio may not send RTP until answer. Wake idle CoreAudio capture now
+	// so its carrier -> caller direction does not depend on caller audio.
+	if _, err := tx.Write(make([]byte, 320)); err != nil && !errors.Is(err, syscall.EAGAIN) {
+		return err
+	}
 	dtmf, err := med.AudioReaderDTMF()
 	if err != nil {
 		return err

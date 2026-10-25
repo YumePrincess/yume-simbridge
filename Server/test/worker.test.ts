@@ -227,6 +227,7 @@ describe("control and call authorization", () => {
     ).text();
     expect(xml).toContain('callerId="+12025550124"');
     expect(xml).toContain("<Number>+12025550123</Number>");
+    expect(xml).toContain('action="/twilio/forward-done"');
   });
 });
 describe("recording integrity and deletion", () => {
@@ -619,5 +620,46 @@ describe("hardware health", () => {
       await edge("/edge/sync", { modemConnected: false })
     ).json()) as { job: unknown };
     expect(result.job).toBeNull();
+  });
+});
+
+describe("dial result announcements", () => {
+  it.each(["busy", "no-answer", "failed", "canceled"])(
+    "announces a failed forward in Chinese and English: %s",
+    async (status) => {
+      const body = await (
+        await webhook("/twilio/forward-done", { DialCallStatus: status })
+      ).text();
+      expect(body).toContain('language="cmn-CN"');
+      expect(body).toContain("您拨打的电话暂时无法接通，请稍后重试。");
+      expect(body).toContain('language="en-US"');
+      expect(body).toContain("Please try again later.");
+      expect(body.indexOf("cmn-CN")).toBeLessThan(body.indexOf("en-US"));
+      expect(body).toContain("<Hangup/>");
+    },
+  );
+  it.each(["completed", "answered", "", "unexpected"])(
+    "does not misreport an answered call or unknown result: %s",
+    async (status) => {
+      for (const path of ["/twilio/done", "/twilio/forward-done"]) {
+        const body = await (
+          await webhook(path, { DialCallStatus: status })
+        ).text();
+        expect(body).not.toContain("<Say");
+        expect(body).toContain("<Hangup/>");
+      }
+    },
+  );
+  it("uses the independent service language for cellular dial failures", async () => {
+    await saveConfig(env, {
+      ...defaults,
+      twilioToken: "test-token",
+      serviceLanguage: "ja",
+    });
+    const body = await (
+      await webhook("/twilio/done", { DialCallStatus: "failed" })
+    ).text();
+    expect(body).toContain('language="ja-JP"');
+    expect(body).toContain("おかけになった電話");
   });
 });

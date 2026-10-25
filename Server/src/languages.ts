@@ -13,6 +13,8 @@ const en = {
   retry: "Incorrect code. Try again followed by pound.",
   number:
     "Enter a local number, or press star for plus before an international country code and number. Finish with pound.",
+  unavailable:
+    "The number you have dialed is temporarily unavailable. Please try again later.",
   disabled: "Telephone gateway is not enabled.",
   invalid: "Invalid destination number.",
   offline: "Cellular gateway is offline.",
@@ -35,6 +37,8 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
     retry: "Code incorrect. Réessayez, puis appuyez sur dièse.",
     number:
       "Saisissez un numéro local. Pour un numéro international, appuyez sur étoile pour le signe plus, puis saisissez l’indicatif et le numéro. Terminez par dièse.",
+    unavailable:
+      "Le numéro demandé est temporairement indisponible. Veuillez réessayer plus tard.",
     disabled: "La passerelle téléphonique n’est pas activée.",
     invalid: "Numéro de destination incorrect.",
     offline: "La passerelle mobile est hors ligne.",
@@ -54,6 +58,8 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
     retry: "暗証番号が違います。もう一度入力し、シャープを押してください。",
     number:
       "国内番号を入力してください。国際電話は最初に星印でプラスを入力し、国番号と番号を入力してください。最後にシャープを押してください。",
+    unavailable:
+      "おかけになった電話はただいまつながりません。しばらくしてからおかけ直しください。",
     disabled: "電話ゲートウェイは有効になっていません。",
     invalid: "電話番号が正しくありません。",
     offline: "携帯電話ゲートウェイはオフラインです。",
@@ -73,6 +79,7 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
     retry: "密码错误，请重新输入，然后按井号键。",
     number:
       "本地号码请直接输入。国际号码请先按星号键表示加号，再输入国家代码和号码。最后按井号键。",
+    unavailable: "您拨打的电话暂时无法接通，请稍后重试。",
     disabled: "电话网关尚未启用。",
     invalid: "目标电话号码无效。",
     offline: "蜂窝电话网关当前离线。",
@@ -92,6 +99,7 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
     retry: "密碼錯誤，請重新輸入，然後按井字鍵。",
     number:
       "本地號碼請直接輸入。國際號碼請先按星號鍵代表加號，再輸入國家代碼與號碼。最後按井字鍵。",
+    unavailable: "您撥打的電話暫時無法接通，請稍後重試。",
     disabled: "電話閘道尚未啟用。",
     invalid: "目標電話號碼無效。",
     offline: "行動電話閘道目前離線。",
