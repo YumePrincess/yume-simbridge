@@ -1,0 +1,9 @@
+import fs from 'node:fs/promises';
+import {cf} from './cloudflare.mjs';
+const zone='9a3ba262e1b341a7a3f2b8f18d62c9b1';
+const path=`/zones/${zone}/email/routing/rules`;
+const rules=await cf(path);const existing=rules.find(r=>r.matchers?.some(m=>m.field==='to'&&m.value==='sms@example.com'));
+if(existing)await fs.writeFile('.secrets/email-rule-backup.json',JSON.stringify(existing),{mode:0o600});
+const value={name:'Yume SIM Hub SMS',enabled:true,matchers:[{type:'literal',field:'to',value:'sms@example.com'}],actions:[{type:'worker',value:['yume-simhub']}],priority:0};
+const result=await cf(existing?path+'/'+existing.id:path,value,existing?'PUT':'POST');
+console.log('Email rule:',result.enabled,result.matchers,result.actions);
