@@ -7,13 +7,16 @@ ROOT="$PWD"
 mkdir -p Mac/bin dist
 VERSION=$(python3 -c 'import json;print(json.load(open("version.json"))["version"])')
 BUILD=$(python3 - <<'PYBUILD'
-import json,plistlib
+import json,plistlib,os
 from pathlib import Path
 base=int(json.loads(Path('version.json').read_text())['build'])
-installed=Path.home()/'Applications/Yume SIM Hub.app/Contents/Info.plist'
+candidates=[Path.home()/'Applications/Yume SIM Hub.app',Path('/Applications/Yume SIM Hub.app')]
+if os.environ.get('SIMHUB_INSTALL_DEST'):candidates.append(Path(os.environ['SIMHUB_INSTALL_DEST']))
 previous=0
-if installed.exists():
-    with installed.open('rb') as f:previous=int(plistlib.load(f).get('CFBundleVersion','0'))
+for candidate in candidates:
+    installed=candidate/'Contents/Info.plist'
+    if installed.exists():
+        with installed.open('rb') as f:previous=max(previous,int(plistlib.load(f).get('CFBundleVersion','0')))
 print(max(base,previous+1))
 PYBUILD
 )
@@ -27,6 +30,7 @@ if [ -d "$APP" ]; then rm -rf "$APP"; fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Mac/bin" "$APP/Contents/Resources/Mac/tools"
 cp "$BIN/YumeSimHub" "$APP/Contents/MacOS/YumeSimHub"
 cp MacApp/Translations.json "$APP/Contents/Resources/Translations.json"
+cp scripts/bootstrap-mac.sh "$APP/Contents/Resources/bootstrap-mac.sh"
 cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
@@ -55,6 +59,6 @@ PY
 codesign --force --deep --sign - "$APP"
 if [ "${1:-}" = "--install" ]; then
  mkdir -p "$HOME/Applications"
- python3 scripts/install-app.py "$APP" "$HOME/Applications/Yume SIM Hub.app"
+ python3 scripts/install-app.py "$APP" "${SIMHUB_INSTALL_DEST:-$HOME/Applications/Yume SIM Hub.app}"
 fi
 printf 'Built: %s\n' "$APP"

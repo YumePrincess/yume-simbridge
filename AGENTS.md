@@ -9,3 +9,6 @@
 
 - Worker code and its Cloudflare Builds root are under `Server/`. Native UI is `MacApp/`; module runtime is `Mac/`.
 - The app is Apple Silicon only and requires macOS 26 or later. Preserve the five native `.lproj` localizations and live menu-bar translation.
+
+- Each App release must include a matching DMG and SHA-256 checksum uploaded to a GitHub Release. Never package local credentials or host-specific bootstrap paths.
+- Let macOS load the bundle icon; do not override NSApp.applicationIconImage. Keep menu localization event-driven and idempotent; no polling timers or menu.update() feedback loops.

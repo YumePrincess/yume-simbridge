@@ -440,6 +440,7 @@ func runFifoMode(acDevice: AudioDeviceID, asDevice: AudioDeviceID, rxPath: Strin
     func startUnits() -> Bool {
         let r = AudioOutputUnitStart(riu)
         let t = AudioOutputUnitStart(tou)
+        if r != noErr || t != noErr { FileHandle.standardError.write("Audio start status: capture=\(r) playback=\(t)\n".data(using: .utf8)!) }
         return r == noErr && t == noErr
     }
     func stopUnits() {
@@ -456,7 +457,14 @@ func runFifoMode(acDevice: AudioDeviceID, asDevice: AudioDeviceID, rxPath: Strin
         }
     }
 
-    guard startUnits() else {
+    // USB hot-plug and format negotiation can briefly return EAGAIN.
+    var started = false
+    for _ in 0..<30 {
+        if startUnits() { started = true; break }
+        stopUnits()
+        Thread.sleep(forTimeInterval: 0.2)
+    }
+    guard started else {
         FileHandle.standardError.write("AudioUnit 启动失败（FIFO 模式）\n".data(using: .utf8)!)
         exit(3)
     }

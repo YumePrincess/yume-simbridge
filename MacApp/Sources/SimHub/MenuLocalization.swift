@@ -71,10 +71,27 @@ import AppKit
       "zh-Hant": "關於 Yume SIM Hub",
     ],
   ]
+  private static var applying = false
+  private static var observers: [NSObjectProtocol] = []
+  static func install() {
+    for name in [
+      NSMenu.didChangeItemNotification, NSMenu.didAddItemNotification,
+      NSApplication.didBecomeActiveNotification,
+    ] {
+      observers.append(
+        NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+          MainActor.assumeIsolated { apply(language: ClientLanguage.current()) }
+        })
+    }
+    apply(language: ClientLanguage.current())
+  }
   static func apply(language: String) {
+    guard !applying else { return }
+    applying = true
+    defer { applying = false }
     guard let menu = NSApp.mainMenu else { return }
     for item in menu.items { apply(item, language: language, top: true) }
-    menu.update()
+
   }
   private static func apply(_ item: NSMenuItem, language: String, top: Bool) {
     let key = titles.keys.first {
@@ -82,12 +99,12 @@ import AppKit
     }
     if let key {
       let title = language == "en" ? key : titles[key]?[language] ?? key
-      item.title = title
-      if top {
+      if item.title != title { item.title = title }
+      if top && item.attributedTitle?.string != title {
         item.attributedTitle = NSAttributedString(
           string: title, attributes: [.font: NSFont.menuBarFont(ofSize: NSFont.systemFontSize)])
       }
-      item.submenu?.title = title
+      if item.submenu?.title != title { item.submenu?.title = title }
     }
     item.submenu?.items.forEach { apply($0, language: language, top: false) }
   }

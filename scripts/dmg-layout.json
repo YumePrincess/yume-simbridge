@@ -1,0 +1,9 @@
+{
+  "canvas": [900, 560],
+  "window_origin": [120, 120],
+  "titlebar_height": 32,
+  "icon_size": 112,
+  "text_size": 13,
+  "app_position": [225, 310],
+  "applications_position": [675, 318]
+}

@@ -154,7 +154,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27003")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27004")"
   }
   func setup(_ mode: String) async {
     guard !setupBusy else { return }
@@ -180,7 +180,7 @@ struct Bootstrap: Codable {
       guard let r = Bundle.main.resourceURL,
         let install = try JSONSerialization.jsonObject(
           with: Data(contentsOf: r.appendingPathComponent("installation.json")))
-          as? [String: String], let root = install["sourceRoot"]
+          as? [String: String], let configuredRoot = install["sourceRoot"]
       else {
         throw NSError(
           domain: "SimHub", code: 7,
@@ -188,21 +188,25 @@ struct Bootstrap: Codable {
       }
       try FileManager.default.createDirectory(
         at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+      let root = configuredRoot.replacingOccurrences(of: "$APP_SUPPORT", with: folder.path)
       let logURL = folder.appendingPathComponent("setup.log")
       try Data().write(to: logURL)
       let out = try FileHandle(forWritingTo: logURL)
       defer { try? out.close() }
       let p = Process()
       p.executableURL = URL(fileURLWithPath: "/bin/bash")
-      p.arguments = [
-        URL(fileURLWithPath: root).appendingPathComponent("scripts/install-mac.sh").path, mode,
-      ]
-      p.currentDirectoryURL = URL(fileURLWithPath: root)
+      if FileManager.default.fileExists(atPath: root + "/scripts/install-mac.sh") {
+        p.arguments = [root + "/scripts/install-mac.sh", mode]
+        p.currentDirectoryURL = URL(fileURLWithPath: root)
+      } else {
+        p.arguments = [r.appendingPathComponent("bootstrap-mac.sh").path, root, mode]
+      }
       p.standardOutput = out
       p.standardError = out
       p.environment = ProcessInfo.processInfo.environment.merging([
         "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "SIMHUB_INSTALL_DEST": Bundle.main.bundleURL.path,
       ]) { _, new in new }
       setupProcess = p
       setupTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -380,7 +384,8 @@ struct Bootstrap: Codable {
       let logFile = try FileHandle(forWritingTo: logURL)
       try logFile.seekToEnd()
       let p = Process()
-      p.executableURL = URL(fileURLWithPath: python)
+      p.executableURL = URL(
+        fileURLWithPath: python.replacingOccurrences(of: "$APP_SUPPORT", with: folder.path))
       p.arguments = [
         "-u", resources.appendingPathComponent("Mac/supervisor.py").path, "--config", cfg.path,
         "--data", folder.appendingPathComponent("runtime").path,
@@ -388,6 +393,7 @@ struct Bootstrap: Codable {
       p.environment = ProcessInfo.processInfo.environment.merging([
         "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "SIMHUB_INSTALL_DEST": Bundle.main.bundleURL.path,
       ]) { _, new in new }
       p.standardOutput = logFile
       p.standardError = logFile
@@ -540,18 +546,9 @@ struct Bootstrap: Codable {
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   var model: Model?
-  private var menuTimer: Timer?
   func applicationDidFinishLaunching(_ notification: Notification) {
-    MenuLocalization.apply(language: ClientLanguage.current())
-    menuTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-      Task { @MainActor in MenuLocalization.apply(language: ClientLanguage.current()) }
-    }
+    MenuLocalization.install()
 
-    if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-      let icon = NSImage(contentsOf: url)
-    {
-      NSApp.applicationIconImage = icon
-    }
   }
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     model?.stopPlayback()
