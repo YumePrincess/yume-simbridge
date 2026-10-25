@@ -1,5 +1,6 @@
-Yume SIM Hub 27.2.0 · Build 27004
+Yume SIM Hub 27.2.0 · Build 27005
 
+- 移除顶部菜单栏常驻图标；关闭窗口继续运行，Dock 重新打开窗口，退出应用才停止服务。
 - 提供 DMG 拖放安装包，支持 Apple Silicon，最低 macOS 26。
 - 五语言客户端：简体中文、繁體中文、日本語、English、Français；窗口顶部和“设置…”均可切换，菜单栏实时同步，修复中文与系统语言反复切换。
 - 图标与 Yume Life After 使用完全相同的资源，移除启动后的运行时覆盖。

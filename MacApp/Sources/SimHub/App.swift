@@ -154,7 +154,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27004")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27005")"
   }
   func setup(_ mode: String) async {
     guard !setupBusy else { return }
@@ -546,14 +546,25 @@ struct Bootstrap: Codable {
 }
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   var model: Model?
+  private var terminating = false
   func applicationDidFinishLaunching(_ notification: Notification) {
     MenuLocalization.install()
 
   }
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard !terminating else { return .terminateLater }
     model?.stopPlayback()
+    guard model?.running == true else { return .terminateNow }
+    terminating = true
     model?.stop(persist: false)
-    return .terminateNow
+    Task { @MainActor in
+      for _ in 0..<80 {
+        if model?.running != true { break }
+        try? await Task.sleep(for: .milliseconds(250))
+      }
+      NSApp.reply(toApplicationShouldTerminate: true)
+    }
+    return .terminateLater
   }
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
@@ -565,18 +576,7 @@ struct Bootstrap: Codable {
       Content(model: model).frame(minWidth: 900, minHeight: 650).onAppear { delegate.model = model }
     }.defaultSize(width: 1060, height: 790)
     SwiftUI.Settings { ClientPreferences(model: model).frame(width: 520, height: 230) }
-    MenuBarExtra("SIM Hub", systemImage: model.running ? "simcard.fill" : "simcard") {
-      Text(model.edge.online == true ? L("模块在线") : L("模块离线"))
-      Button(model.running ? L("停止服务") : L("启动服务")) {
-        if model.running { model.stop() } else { model.start() }
-      }
-      Button(L("显示窗口")) {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
-      }
-      Divider()
-      Button(L("退出")) { NSApp.terminate(nil) }
-    }
+
   }
 }
 struct Content: View {
