@@ -219,7 +219,7 @@ func (e *engine) sendSMS(ctx context.Context, j job) {
 		e.saveResult(j.ID, "failed", "Invalid job")
 		return
 	}
-	if !regexp.MustCompile(`^\+[1-9]\d{6,14}$`).MatchString(p.To) || len(p.Body) == 0 || len([]rune(p.Body)) > 2000 {
+	if !regexp.MustCompile(`^(\+[1-9]\d{6,14}|[0-9]{1,20})$`).MatchString(p.To) || len(p.Body) == 0 || len([]rune(p.Body)) > 2000 {
 		e.saveResult(j.ID, "failed", "Invalid SMS payload")
 		return
 	}
@@ -483,7 +483,7 @@ func (e *engine) outgoing(d *diago.DialogServerSession) {
 		_ = d.Respond(403, "Forbidden", nil)
 		return
 	}
-	if !regexp.MustCompile(`^\+[1-9]\d{6,14}$`).MatchString(target.To) {
+	if !regexp.MustCompile(`^(\+[1-9]\d{6,14}|[0-9]{1,20})$`).MatchString(target.To) {
 		_ = d.Respond(403, "Forbidden", nil)
 		return
 	}
@@ -546,11 +546,10 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 	if err != nil {
 		return err
 	}
-	dtmf.OnDTMF(func(digit rune) error {
-		c, stop := context.WithTimeout(ctx, 3*time.Second)
-		defer stop()
-		return e.modem.SendDTMF(c, id, digit)
-	})
+	relay := newToneRelay(ctx, e.modem, id)
+	defer relay.close()
+	dtmf.OnDTMF(relay.enqueue)
+
 	props := diago.MediaProps{}
 	_, err = med.AudioReader(diago.WithAudioReaderMediaProps(&props))
 	if err != nil {

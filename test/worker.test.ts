@@ -12,6 +12,7 @@ class DB {
   constructor() {
     this.db.exec(readFileSync("migrations/0001.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0002_recordings.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0003_notifications.sql", "utf8"));
   }
   prepare(sql: string) {
     const stmt = this.db.prepare(sql);
@@ -388,5 +389,118 @@ describe("streaming recording archive", () => {
     expect(Buffer.from(await res.arrayBuffer())).toEqual(
       original.subarray(CHUNK - 5, CHUNK + 20),
     );
+  });
+});
+
+describe("local numbering, service language and direct notifications", () => {
+  it.each([
+    ["95555", "95555"],
+    ["02222826128", "02222826128"],
+    ["*+12025550123", "+12025550123"],
+  ])("preserves the requested dialing form %s", async (input, expected) => {
+    await edge("/edge/sync", { voiceReady: true, sipRegistered: true });
+    await webhook("/twilio/voice");
+    await webhook("/twilio/pin", { Digits: "654321" });
+    const xml = await (await webhook("/twilio/dial", { Digits: input })).text();
+    const id = xml.match(/X-Job=([^<]+)/)![1];
+    const result = (await (await edge("/edge/authorize", { id })).json()) as {
+      to: string;
+    };
+    expect(result.to).toBe(expected);
+  });
+  it("accepts local SMS destinations and international plus, and rejects command injection", async () => {
+    const { cellularNumber } = await import("../src/config");
+    for (const n of ["10086", "95555", "02222826128", "+12025550123"])
+      expect(cellularNumber(n)).toBe(n);
+    for (const n of ["+0222", "123;ATH", "123\rATD", "+1", "++12025550123"])
+      expect(() => cellularNumber(n)).toThrow();
+  });
+  it.each(["en", "fr", "ja", "zh-Hans", "zh-Hant"] as const)(
+    "uses service language %s in phone prompts",
+    async (language) => {
+      const { config, updateConfig } = await import("../src/config");
+      const { prompt, speech } = await import("../src/languages");
+      await updateConfig(env, await config(env), { serviceLanguage: language });
+      const xml = await (await webhook("/twilio/voice")).text();
+      expect(xml).toContain(prompt(language, "pin"));
+      expect(xml).toContain('language="' + speech[language].locale + '"');
+    },
+  );
+  it("uses the internal Gotify binding and localizes notices without translating SMS content", async () => {
+    const { config, updateConfig } = await import("../src/config");
+    await updateConfig(env, await config(env), {
+      gotifyToken: "gotify-test-token",
+      serviceLanguage: "fr",
+    });
+    const send = vi.fn().mockImplementation(async () => new Response("{}"));
+    env.GOTIFY = { fetch: send } as unknown as Fetcher;
+    await edge("/edge/incoming", { from: "+8613812345678" });
+    await Promise.all(pending);
+    expect(send).toHaveBeenCalledTimes(1);
+    const first = JSON.parse(send.mock.calls[0][1].body);
+    expect(first.title).toContain("Appel SIM entrant");
+    expect(first.message).toContain("Numéro de l’appelant");
+    await edge("/edge/sms", {
+      id: "language-test",
+      from: "10086",
+      body: "你好，原文保持不变。",
+    });
+    await Promise.all(pending);
+    const sms = JSON.parse(send.mock.calls[1][1].body);
+    expect(sms.title).toContain("Message SIM");
+    expect(sms.message).toBe("你好，原文保持不变。");
+    const row = (await db
+      .prepare(
+        "SELECT notified FROM events WHERE id='call-' || (SELECT id FROM jobs WHERE kind='incoming' LIMIT 1)",
+      )
+      .first()) as { notified: number };
+    expect(row.notified).toBe(1);
+  });
+  it("stores a notification failure and can retry without losing the event", async () => {
+    const { config, updateConfig } = await import("../src/config");
+    const { notify } = await import("../src/gotify");
+    await updateConfig(env, await config(env), { gotifyToken: "token" });
+    const send = vi
+      .fn()
+      .mockResolvedValue(new Response("fail", { status: 503 }));
+    env.GOTIFY = { fetch: send } as unknown as Fetcher;
+    await edge("/edge/incoming", { from: "95555" });
+    await Promise.all(pending);
+    let row = (await db
+      .prepare("SELECT notified,last_error FROM events")
+      .first()) as { notified: number; last_error: string };
+    expect(row.notified).toBe(0);
+    expect(row.last_error).toBe("Gotify HTTP 503");
+    send.mockResolvedValue(new Response("{}"));
+    await notify(env);
+    row = (await db
+      .prepare("SELECT notified,last_error FROM events")
+      .first()) as typeof row;
+    expect(row.notified).toBe(1);
+    expect(row.last_error).toBe("");
+  });
+  it("records the caller number and direction rather than exposing filenames as the title", async () => {
+    const incoming = (await (
+      await edge("/edge/incoming", { from: "02222826128" })
+    ).json()) as { id: string };
+    await webhook("/twilio/cellular", {
+      From: "sip:incoming@test.sip.twilio.com",
+      "SipHeader_X-Bridge": incoming.id,
+    });
+    await recordingCallback(env, {
+      RecordingSid: "RE" + "e".repeat(32),
+      CallSid: sid,
+      RecordingStatus: "completed",
+    });
+    const list = (await (await edge("/edge/recordings")).json()) as {
+      peer: string;
+      direction: string;
+      target: string;
+    }[];
+    expect(list[0]).toMatchObject({
+      peer: "02222826128",
+      direction: "inbound",
+      target: "+12025550123",
+    });
   });
 });

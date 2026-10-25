@@ -48,7 +48,7 @@ async function edgeAPI(
         "SELECT id,kind,payload,status,created,updated,result FROM jobs ORDER BY created DESC LIMIT 30",
       ).all(),
       env.DB.prepare(
-        "SELECT id,kind,payload,created,notified,attempts FROM events WHERE kind='sms.received' ORDER BY created DESC LIMIT 30",
+        "SELECT id,kind,payload,created,notified,attempts,last_error AS result FROM events WHERE kind='sms.received' ORDER BY created DESC LIMIT 30",
       ).all(),
     ]);
     return json({
@@ -62,6 +62,20 @@ async function edgeAPI(
     return json(
       publicConfig(await updateConfig(env, await config(env), await body(req))),
     );
+  if (path === "/edge/notify-test" && req.method === "POST") {
+    const id = "test-" + crypto.randomUUID();
+    await event(env, id, "system.test", {});
+    await notify(env);
+    const row = await env.DB.prepare(
+      "SELECT notified,last_error FROM events WHERE id=?",
+    )
+      .bind(id)
+      .first<{ notified: number; last_error: string }>();
+    return json({
+      delivered: row?.notified === 1,
+      error: row?.last_error || "",
+    });
+  }
   if (path === "/edge/notify-retry" && req.method === "POST") {
     await env.DB.prepare(
       "UPDATE events SET notified=0,attempts=0 WHERE kind='sms.received' AND notified<>1",
@@ -218,7 +232,7 @@ export default {
         "UPDATE jobs SET status='expired',updated=? WHERE kind IN ('dial','incoming') AND status='queued' AND created<?",
       ).bind(now(), now() - 60000),
       env.DB.prepare(
-        "UPDATE events SET notified=0 WHERE notified=2 AND created<?",
+        "UPDATE events SET notified=0 WHERE notified=2 AND delivery_updated<?",
       ).bind(now() - 300000),
     ]);
     await Promise.all([notify(env), recordingTasks(env)]);

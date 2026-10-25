@@ -1,6 +1,8 @@
+import { serviceLanguages, type ServiceLanguage } from "./languages";
 import { EncryptJWT, jwtDecrypt } from "jose";
 import { unb64, fail, enc, b64 } from "./util";
 export type Config = {
+  serviceLanguage: ServiceLanguage;
   forwardTo: string;
   gotifyUrl: string;
   gotifyToken: string;
@@ -15,6 +17,7 @@ export type Config = {
   emailEnabled: boolean;
 };
 export const defaults: Config = {
+  serviceLanguage: "en",
   forwardTo: "+12025550123",
   gotifyUrl: "https://gotify.example.com",
   gotifyToken: "",
@@ -33,6 +36,13 @@ export const number = (v: unknown) => {
     fail("请输入 E.164 国际号码（例如 +12025550123）");
   return v;
 };
+export function cellularNumber(v: unknown) {
+  if (typeof v !== "string" || !/^(?:\+[1-9]\d{6,14}|[0-9]{1,20})$/.test(v))
+    fail(
+      "Use +countrycode for international numbers, or digits only for local numbers",
+    );
+  return v;
+}
 export async function encrypt(env: Env, data: Record<string, unknown>) {
   return new EncryptJWT(data)
     .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
@@ -86,6 +96,11 @@ export async function updateConfig(
   v: Record<string, unknown>,
 ) {
   const c = { ...old };
+  if ("serviceLanguage" in v) {
+    if (!serviceLanguages.includes(v.serviceLanguage as ServiceLanguage))
+      fail("Invalid service language");
+    c.serviceLanguage = v.serviceLanguage as ServiceLanguage;
+  }
   if ("forwardTo" in v) c.forwardTo = number(v.forwardTo);
   if (typeof v.gotifyUrl === "string") {
     const u = new URL(v.gotifyUrl);

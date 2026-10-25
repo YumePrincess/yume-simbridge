@@ -12,6 +12,7 @@ BIN=$(swift build -c release --package-path MacApp --show-bin-path)
 APP="$ROOT/dist/Yume SIM Hub.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/local/bin" "$APP/Contents/Resources/local/tools"
 cp "$BIN/YumeSimHub" "$APP/Contents/MacOS/YumeSimHub"
+cp MacApp/Translations.json "$APP/Contents/Resources/Translations.json"
 cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp local/bin/simhub-edge local/bin/voice-audio-bridge "$APP/Contents/Resources/local/bin/"
 cp local/supervisor.py "$APP/Contents/Resources/local/"

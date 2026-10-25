@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 import { b64, unb64, enc, fail } from "./util";
 export const CHUNK = 256 * 1024;
 export type Recording = {
+  direction?: "inbound" | "outbound";
+  peer?: string;
+  target?: string;
   sid: string;
   call: string;
   conference: string;

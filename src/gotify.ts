@@ -1,31 +1,51 @@
+import { prompt } from "./languages";
 import { config } from "./config";
 export async function notify(env: Env) {
   const c = await config(env);
   if (!c.gotifyToken) return;
   const rows = await env.DB.prepare(
-    "SELECT id,kind,payload FROM events WHERE kind IN ('sms.received','call.incoming') AND notified=0 AND attempts<20 ORDER BY created LIMIT 10",
+    "SELECT id,kind,payload FROM events WHERE kind IN ('sms.received','call.incoming','system.test') AND notified=0 AND attempts<20 ORDER BY created LIMIT 10",
   ).all<{ id: string; kind: string; payload: string }>();
   for (const row of rows.results) {
     // Claim one delivery; abandoned claims return to pending after five minutes.
     const lock = await env.DB.prepare(
-      "UPDATE events SET notified=2,attempts=attempts+1 WHERE id=? AND notified=0 RETURNING id",
+      "UPDATE events SET notified=2,attempts=attempts+1,delivery_updated=? WHERE id=? AND notified=0 RETURNING id",
     )
-      .bind(row.id)
+      .bind(Date.now(), row.id)
       .first();
     if (!lock) continue;
     let delivered = false;
+    let error = "";
     try {
       const p = JSON.parse(row.payload);
-      const caller = p.from && p.from !== "unknown" ? p.from : "未知／隐藏号码";
+      const language = c.serviceLanguage;
+      const caller =
+        p.from && p.from !== "unknown" ? p.from : prompt(language, "unknown");
       const title =
-        row.kind === "call.incoming"
-          ? "SIM 来电 · " + caller
-          : "SIM 短信 · " + p.from;
+        prompt(
+          language,
+          row.kind === "system.test"
+            ? "test"
+            : row.kind === "call.incoming"
+              ? "incoming"
+              : "sms",
+        ) + (row.kind === "system.test" ? "" : " · " + caller);
       const message =
-        row.kind === "call.incoming"
-          ? `原始来电号码：${caller}\n准备通过 Twilio ${p.via} 转接至 ${p.to}。\n接听页面显示的号码为 ${p.via}。`
-          : p.body;
-      const r = await fetch(c.gotifyUrl + "/message", {
+        row.kind === "system.test"
+          ? prompt(language, "testBody")
+          : row.kind === "call.incoming"
+            ? [
+                prompt(language, "from") + ": " + caller,
+                prompt(language, "forward", { via: p.via, to: p.to }),
+                prompt(language, "display", { via: p.via }),
+              ].join("\n")
+            : p.body;
+      // Internal binding avoids public Worker-to-Worker routing/security filters.
+      const send =
+        new URL(c.gotifyUrl).origin === "https://gotify.example.com"
+          ? env.GOTIFY.fetch.bind(env.GOTIFY)
+          : fetch;
+      const r = await send(c.gotifyUrl + "/message", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -41,12 +61,15 @@ export async function notify(env: Env) {
         redirect: "error",
       });
       delivered = r.ok;
+      if (!r.ok) error = "Gotify HTTP " + r.status;
       await r.body?.cancel();
     } catch {
-      /* durable retry */
+      error = "Gotify request failed";
     }
-    await env.DB.prepare("UPDATE events SET notified=? WHERE id=?")
-      .bind(delivered ? 1 : 0, row.id)
+    await env.DB.prepare(
+      "UPDATE events SET notified=?,last_error=?,delivery_updated=? WHERE id=?",
+    )
+      .bind(delivered ? 1 : 0, error, Date.now(), row.id)
       .run();
   }
 }

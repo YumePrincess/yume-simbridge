@@ -9,8 +9,22 @@ export async function recordingCallback(env: Env, f: Record<string, string>) {
   )
     fail("Invalid recording", 400);
   if (f.RecordingStatus !== "completed") return;
+  const job = await env.DB.prepare(
+    "SELECT kind,payload FROM jobs WHERE kind IN ('incoming','dial') AND json_extract(payload,'$.callSid')=? ORDER BY created DESC LIMIT 1",
+  )
+    .bind(f.CallSid)
+    .first<{ kind: string; payload: string }>();
+  const details = job ? JSON.parse(job.payload) : {};
   const r: Recording = {
     sid: f.RecordingSid,
+    direction:
+      job?.kind === "incoming"
+        ? "inbound"
+        : job?.kind === "dial"
+          ? "outbound"
+          : undefined,
+    peer: job?.kind === "incoming" ? details.from : details.to,
+    target: details.to,
     call: f.CallSid,
     conference: "",
     duration: Math.max(0, Number(f.RecordingDuration) || 0),
@@ -118,6 +132,9 @@ export async function listRecordings(env: Env, before?: string) {
     const v = JSON.parse(r.value) as Recording;
     return {
       sid: v.sid,
+      direction: v.direction,
+      peer: v.peer,
+      target: v.target,
       call: v.call,
       duration: v.duration,
       created: v.created,

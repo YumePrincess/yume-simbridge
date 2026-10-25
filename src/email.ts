@@ -1,5 +1,5 @@
 import PostalMime from "postal-mime";
-import { config, number } from "./config";
+import { config, cellularNumber } from "./config";
 import { enqueue, limit } from "./store";
 import { readBytes, enc } from "./util";
 export async function receive(message: ForwardableEmailMessage, env: Env) {
@@ -39,7 +39,7 @@ export async function receive(message: ForwardableEmailMessage, env: Env) {
       ).toLowerCase() !== domain
     )
       throw Error("Cloudflare DMARC authentication required");
-    const to = number(mail.subject?.trim());
+    const to = cellularNumber(mail.subject?.trim());
     const body = mail.text?.trim();
     if (!body || body.length > 2000)
       throw Error("Use text/plain body, 1–2000 characters");

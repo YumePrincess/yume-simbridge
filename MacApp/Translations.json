@@ -1,0 +1,812 @@
+{
+  "客户端语言": {
+    "en": "Client language",
+    "fr": "Langue du client",
+    "ja": "クライアントの言語",
+    "zh-Hant": "用戶端語言"
+  },
+  "服务提示语言（电话 / Gotify）": {
+    "en": "Service language (phone / Gotify)",
+    "fr": "Langue du service (téléphone / Gotify)",
+    "ja": "サービスの言語（電話 / Gotify）",
+    "zh-Hant": "服務提示語言（電話 / Gotify）"
+  },
+  "独立于客户端语言；同时控制电话提示音和 Gotify 通知说明，短信原文不变。": {
+    "en": "Independent of the client language. Applies to phone prompts and Gotify notices; message content stays unchanged.",
+    "fr": "Indépendante de la langue du client. S’applique aux annonces téléphoniques et à Gotify ; le texte des SMS reste inchangé.",
+    "ja": "クライアントの言語とは別です。電話案内と Gotify 通知に適用され、SMS 本文は変更されません。",
+    "zh-Hant": "獨立於用戶端語言；同時控制電話提示音與 Gotify 通知說明，簡訊原文不變。"
+  },
+  "Mac 蜂窝通信中枢 · ": {
+    "en": "Mac cellular gateway · ",
+    "fr": "Passerelle mobile Mac · ",
+    "ja": "Mac 携帯電話ゲートウェイ · ",
+    "zh-Hant": "Mac 行動通訊中樞 · "
+  },
+  "配置": {
+    "en": "Settings",
+    "fr": "Réglages",
+    "ja": "設定",
+    "zh-Hant": "設定"
+  },
+  "电话路由": {
+    "en": "Call routing",
+    "fr": "Routage des appels",
+    "ja": "電話ルーティング",
+    "zh-Hant": "電話路由"
+  },
+  "SIM 来电转接号码": {
+    "en": "SIM forwarding number",
+    "fr": "Numéro de transfert SIM",
+    "ja": "SIM 着信の転送先",
+    "zh-Hant": "SIM 來電轉接號碼"
+  },
+  "启用 SIM 来电 → Twilio → 目标号码": {
+    "en": "Enable SIM calls → Twilio → destination",
+    "fr": "Activer SIM → Twilio → destination",
+    "ja": "SIM 着信 → Twilio → 転送先を有効化",
+    "zh-Hant": "啟用 SIM 來電 → Twilio → 目標號碼"
+  },
+  "电话密码（6–12 位数字）": {
+    "en": "Phone access code (6–12 digits)",
+    "fr": "Code téléphonique (6 à 12 chiffres)",
+    "ja": "電話の暗証番号（6〜12 桁）",
+    "zh-Hant": "電話密碼（6–12 位數字）"
+  },
+  "电话密码（已设置，留空保持）": {
+    "en": "Access code (set; leave blank to keep)",
+    "fr": "Code défini ; laisser vide pour le conserver",
+    "ja": "暗証番号（設定済み、空欄で維持）",
+    "zh-Hant": "電話密碼（已設定，留空保留）"
+  },
+  "启用 Twilio 密码验证 → SIM 外呼": {
+    "en": "Enable Twilio access code → SIM dialing",
+    "fr": "Activer code Twilio → appels SIM",
+    "ja": "Twilio 暗証番号 → SIM 発信を有効化",
+    "zh-Hant": "啟用 Twilio 密碼驗證 → SIM 撥出"
+  },
+  "拨打 +12025550124 → 密码 + # → 本地号码或 *国际号码 + #": {
+    "en": "Call +12025550124 → code + # → local number or *international number + #",
+    "fr": "Appeler +12025550124 → code + # → numéro local ou *international + #",
+    "ja": "+12025550124 → 暗証番号 + # → 国内番号または *国際番号 + #",
+    "zh-Hant": "撥打 +12025550124 → 密碼 + # → 本地號碼或 *國際號碼 + #"
+  },
+  "Gotify 短信推送": {
+    "en": "Gotify SMS notifications",
+    "fr": "Notifications SMS Gotify",
+    "ja": "Gotify SMS 通知",
+    "zh-Hant": "Gotify 簡訊推播"
+  },
+  "服务地址": {
+    "en": "Service URL",
+    "fr": "Adresse du service",
+    "ja": "サービス URL",
+    "zh-Hant": "服務網址"
+  },
+  "应用 token": {
+    "en": "Application token",
+    "fr": "Jeton d’application",
+    "ja": "アプリケーショントークン",
+    "zh-Hant": "應用程式 token"
+  },
+  "应用 token（已配置，留空保持）": {
+    "en": "Application token (set; leave blank to keep)",
+    "fr": "Jeton défini ; laisser vide pour le conserver",
+    "ja": "トークン（設定済み、空欄で維持）",
+    "zh-Hant": "應用程式 token（已設定，留空保留）"
+  },
+  "邮件发送短信": {
+    "en": "Email to SMS",
+    "fr": "E-mail vers SMS",
+    "ja": "メールから SMS を送信",
+    "zh-Hant": "郵件傳送簡訊"
+  },
+  "启用邮件发送短信": {
+    "en": "Enable email to SMS",
+    "fr": "Activer l’envoi de SMS par e-mail",
+    "ja": "メールからの SMS 送信を有効化",
+    "zh-Hant": "啟用郵件傳送簡訊"
+  },
+  "sms@example.com · 主题填 +国际号码或本地号码，纯文本正文为短信": {
+    "en": "sms@example.com · Subject: +international or local number; plain-text body: SMS",
+    "fr": "sms@example.com · Objet : numéro +international ou local ; corps en texte brut : SMS",
+    "ja": "sms@example.com · 件名：+国際番号または国内番号、プレーンテキスト本文：SMS",
+    "zh-Hant": "sms@example.com · 主旨填 +國際號碼或本地號碼，純文字內文為簡訊"
+  },
+  "允许的发件人（逗号分隔）": {
+    "en": "Allowed senders (comma-separated)",
+    "fr": "Expéditeurs autorisés (séparés par des virgules)",
+    "ja": "許可する送信者（カンマ区切り）",
+    "zh-Hant": "允許的寄件者（逗號分隔）"
+  },
+  "要求 Cloudflare 验证 DMARC 通过；Mac 离线时任务会排队。": {
+    "en": "Cloudflare DMARC verification is required. Jobs queue while the Mac is offline.",
+    "fr": "La validation DMARC Cloudflare est requise. Les tâches attendent si le Mac est hors ligne.",
+    "ja": "Cloudflare の DMARC 検証が必要です。Mac がオフラインの場合は待機します。",
+    "zh-Hant": "需要通過 Cloudflare DMARC 驗證；Mac 離線時工作會排隊。"
+  },
+  "保存配置": {
+    "en": "Save settings",
+    "fr": "Enregistrer les réglages",
+    "ja": "設定を保存",
+    "zh-Hant": "儲存設定"
+  },
+  "短信收件箱": {
+    "en": "SMS inbox",
+    "fr": "Boîte SMS",
+    "ja": "SMS 受信箱",
+    "zh-Hant": "簡訊收件匣"
+  },
+  "发送与通话": {
+    "en": "Messages and calls",
+    "fr": "Messages et appels",
+    "ja": "送信と通話",
+    "zh-Hant": "傳送與通話"
+  },
+  "通话录音": {
+    "en": "Call recordings",
+    "fr": "Enregistrements d’appels",
+    "ja": "通話録音",
+    "zh-Hant": "通話錄音"
+  },
+  "接入与运行": {
+    "en": "Connection and runtime",
+    "fr": "Connexion et exécution",
+    "ja": "接続と実行",
+    "zh-Hant": "連線與執行"
+  },
+  "停止播放": {
+    "en": "Stop playback",
+    "fr": "Arrêter la lecture",
+    "ja": "再生停止",
+    "zh-Hant": "停止播放"
+  },
+  "播放": {
+    "en": "Play",
+    "fr": "Lire",
+    "ja": "再生",
+    "zh-Hant": "播放"
+  },
+  "下载": {
+    "en": "Download",
+    "fr": "Télécharger",
+    "ja": "ダウンロード",
+    "zh-Hant": "下載"
+  },
+  "重试": {
+    "en": "Retry",
+    "fr": "Réessayer",
+    "ja": "再試行",
+    "zh-Hant": "重試"
+  },
+  "删除": {
+    "en": "Delete",
+    "fr": "Supprimer",
+    "ja": "削除",
+    "zh-Hant": "刪除"
+  },
+  "录音从振铃到挂断 · 双声道 · R2 simhub/ 加密归档": {
+    "en": "Ringing-to-hangup recording · dual channel · encrypted in R2 simhub/",
+    "fr": "Sonnerie à raccrochage · deux canaux · chiffré dans R2 simhub/",
+    "ja": "呼び出しから終了まで録音 · 2 チャンネル · R2 simhub/ に暗号化保存",
+    "zh-Hant": "從振鈴到掛斷錄音 · 雙聲道 · R2 simhub/ 加密歸檔"
+  },
+  "更早录音": {
+    "en": "Older recordings",
+    "fr": "Enregistrements précédents",
+    "ja": "以前の録音",
+    "zh-Hant": "更早錄音"
+  },
+  "Twilio Auth Token（留空保持）": {
+    "en": "Twilio Auth Token (leave blank to keep)",
+    "fr": "Twilio Auth Token (vide pour conserver)",
+    "ja": "Twilio Auth Token（空欄で維持）",
+    "zh-Hant": "Twilio Auth Token（留空保留）"
+  },
+  "SIP 域名": {
+    "en": "SIP domain",
+    "fr": "Domaine SIP",
+    "ja": "SIP ドメイン",
+    "zh-Hant": "SIP 網域"
+  },
+  "SIP 用户名": {
+    "en": "SIP username",
+    "fr": "Nom d’utilisateur SIP",
+    "ja": "SIP ユーザー名",
+    "zh-Hant": "SIP 使用者名稱"
+  },
+  "SIP 密码（留空保持）": {
+    "en": "SIP password (leave blank to keep)",
+    "fr": "Mot de passe SIP (vide pour conserver)",
+    "ja": "SIP パスワード（空欄で維持）",
+    "zh-Hant": "SIP 密碼（留空保留）"
+  },
+  "保存接入配置": {
+    "en": "Save connection settings",
+    "fr": "Enregistrer la connexion",
+    "ja": "接続設定を保存",
+    "zh-Hant": "儲存連線設定"
+  },
+  "安装与更新": {
+    "en": "Install and update",
+    "fr": "Installation et mise à jour",
+    "ja": "インストールと更新",
+    "zh-Hant": "安裝與更新"
+  },
+  "打开安装 / 更新向导": {
+    "en": "Open setup / update assistant",
+    "fr": "Ouvrir l’assistant d’installation / mise à jour",
+    "ja": "インストール／更新アシスタントを開く",
+    "zh-Hant": "開啟安裝 / 更新精靈"
+  },
+  "本机": {
+    "en": "This Mac",
+    "fr": "Ce Mac",
+    "ja": "この Mac",
+    "zh-Hant": "本機"
+  },
+  "登录 Mac 后启动": {
+    "en": "Start at Mac login",
+    "fr": "Démarrer à l’ouverture de session",
+    "ja": "Mac ログイン時に起動",
+    "zh-Hant": "登入 Mac 後啟動"
+  },
+  "关闭窗口会继续运行；退出客户端会停止模块服务。运行时防止 Mac 自动睡眠。": {
+    "en": "Closing the window keeps the service running. Quitting stops it. The Mac stays awake while running.",
+    "fr": "Fermer la fenêtre laisse le service actif. Quitter l’arrête. Le Mac reste éveillé pendant l’exécution.",
+    "ja": "ウインドウを閉じても動作します。アプリを終了するとサービスを停止します。実行中は自動スリープを防ぎます。",
+    "zh-Hant": "關閉視窗會繼續執行；結束用戶端會停止模組服務。執行時防止 Mac 自動睡眠。"
+  },
+  "客户端凭据（保存在钥匙串）": {
+    "en": "Client credential (stored in Keychain)",
+    "fr": "Identifiant du client (dans le trousseau)",
+    "ja": "クライアント認証情報（キーチェーン保存）",
+    "zh-Hant": "用戶端憑證（儲存在鑰匙圈）"
+  },
+  "保存客户端凭据": {
+    "en": "Save client credential",
+    "fr": "Enregistrer l’identifiant",
+    "ja": "認証情報を保存",
+    "zh-Hant": "儲存用戶端憑證"
+  },
+  "运行日志": {
+    "en": "Runtime log",
+    "fr": "Journal d’exécution",
+    "ja": "実行ログ",
+    "zh-Hant": "執行記錄"
+  },
+  "暂无日志": {
+    "en": "No logs yet",
+    "fr": "Aucun journal",
+    "ja": "ログはありません",
+    "zh-Hant": "尚無記錄"
+  },
+  "worker.example.com · 配置仅在客户端访问": {
+    "en": "worker.example.com · Manage settings in the client",
+    "fr": "worker.example.com · Réglages dans le client uniquement",
+    "ja": "worker.example.com · 設定はクライアントのみ",
+    "zh-Hant": "worker.example.com · 設定僅限用戶端存取"
+  },
+  "刷新": {
+    "en": "Refresh",
+    "fr": "Actualiser",
+    "ja": "更新",
+    "zh-Hant": "重新整理"
+  },
+  "安装与更新向导": {
+    "en": "Setup and update assistant",
+    "fr": "Assistant d’installation et de mise à jour",
+    "ja": "インストールと更新アシスタント",
+    "zh-Hant": "安裝與更新精靈"
+  },
+  "① 检测系统与依赖  →  ② 安装运行环境  →  ③ 检查 GitHub 更新  →  ④ 安装并重启": {
+    "en": "① Check dependencies → ② Install runtime → ③ Check GitHub updates → ④ Install and restart",
+    "fr": "① Vérifier → ② Installer → ③ Rechercher les mises à jour GitHub → ④ Installer et redémarrer",
+    "ja": "① 依存関係を確認 → ② 環境をインストール → ③ GitHub 更新を確認 → ④ 更新して再起動",
+    "zh-Hant": "① 檢查系統與相依套件 → ② 安裝環境 → ③ 檢查 GitHub 更新 → ④ 安裝並重新啟動"
+  },
+  "运行环境：Python 3.12 / pyusb / libusb；构建工具：Go / Xcode Command Line Tools。客户端不需要 Node.js。": {
+    "en": "Runtime: Python 3.12 / pyusb / libusb. Build tools: Go / Xcode Command Line Tools. Node.js is not required by the client.",
+    "fr": "Exécution : Python 3.12 / pyusb / libusb. Compilation : Go / Xcode Command Line Tools. Le client ne nécessite pas Node.js.",
+    "ja": "実行環境：Python 3.12 / pyusb / libusb。ビルド：Go / Xcode Command Line Tools。Node.js は不要です。",
+    "zh-Hant": "執行環境：Python 3.12 / pyusb / libusb；建置工具：Go / Xcode Command Line Tools。用戶端不需要 Node.js。"
+  },
+  "检测依赖": {
+    "en": "Check dependencies",
+    "fr": "Vérifier les dépendances",
+    "ja": "依存関係を確認",
+    "zh-Hant": "檢查相依套件"
+  },
+  "安装 / 修复依赖": {
+    "en": "Install / repair dependencies",
+    "fr": "Installer / réparer les dépendances",
+    "ja": "依存関係をインストール／修復",
+    "zh-Hant": "安裝 / 修復相依套件"
+  },
+  "检查项目更新": {
+    "en": "Check project updates",
+    "fr": "Rechercher une mise à jour",
+    "ja": "プロジェクト更新を確認",
+    "zh-Hant": "檢查專案更新"
+  },
+  "安装项目更新": {
+    "en": "Install project update",
+    "fr": "Installer la mise à jour",
+    "ja": "プロジェクト更新をインストール",
+    "zh-Hant": "安裝專案更新"
+  },
+  "正在处理，请保持客户端打开…": {
+    "en": "Working. Keep the client open…",
+    "fr": "En cours. Gardez le client ouvert…",
+    "ja": "処理中です。アプリを開いたままにしてください…",
+    "zh-Hant": "正在處理，請保持用戶端開啟…"
+  },
+  "请选择一个步骤开始。安装和更新会暂时停止模块服务，保留钥匙串凭据与运行数据。": {
+    "en": "Choose a step to begin. Install and update temporarily stop the service and preserve credentials and data.",
+    "fr": "Choisissez une étape. Installation et mise à jour arrêtent temporairement le service et préservent identifiants et données.",
+    "ja": "手順を選んでください。インストールと更新中はサービスを停止し、認証情報とデータを保持します。",
+    "zh-Hant": "請選擇一個步驟。安裝與更新會暫停模組服務，並保留鑰匙圈憑證及執行資料。"
+  },
+  "关闭": {
+    "en": "Close",
+    "fr": "Fermer",
+    "ja": "閉じる",
+    "zh-Hant": "關閉"
+  },
+  "完成并重启客户端": {
+    "en": "Finish and restart client",
+    "fr": "Terminer et redémarrer",
+    "ja": "完了して再起動",
+    "zh-Hant": "完成並重新啟動用戶端"
+  },
+  "模块": {
+    "en": "Modem",
+    "fr": "Module",
+    "ja": "モジュール",
+    "zh-Hant": "模組"
+  },
+  "音频": {
+    "en": "Audio",
+    "fr": "Audio",
+    "ja": "音声",
+    "zh-Hant": "音訊"
+  },
+  "通话": {
+    "en": "Call",
+    "fr": "Appel",
+    "ja": "通話",
+    "zh-Hant": "通話"
+  },
+  "在线": {
+    "en": "Online",
+    "fr": "En ligne",
+    "ja": "オンライン",
+    "zh-Hant": "在線"
+  },
+  "离线": {
+    "en": "Offline",
+    "fr": "Hors ligne",
+    "ja": "オフライン",
+    "zh-Hant": "離線"
+  },
+  "就绪": {
+    "en": "Ready",
+    "fr": "Prêt",
+    "ja": "準備完了",
+    "zh-Hant": "就緒"
+  },
+  "未就绪": {
+    "en": "Not ready",
+    "fr": "Non prêt",
+    "ja": "準備未完了",
+    "zh-Hant": "尚未就緒"
+  },
+  "已注册": {
+    "en": "Registered",
+    "fr": "Enregistré",
+    "ja": "登録済み",
+    "zh-Hant": "已註冊"
+  },
+  "未注册": {
+    "en": "Not registered",
+    "fr": "Non enregistré",
+    "ja": "未登録",
+    "zh-Hant": "尚未註冊"
+  },
+  "使用中": {
+    "en": "In use",
+    "fr": "En cours",
+    "ja": "使用中",
+    "zh-Hant": "使用中"
+  },
+  "空闲": {
+    "en": "Idle",
+    "fr": "Libre",
+    "ja": "待機中",
+    "zh-Hant": "閒置"
+  },
+  "模块在线": {
+    "en": "Modem online",
+    "fr": "Module en ligne",
+    "ja": "モジュールはオンライン",
+    "zh-Hant": "模組在線"
+  },
+  "模块离线": {
+    "en": "Modem offline",
+    "fr": "Module hors ligne",
+    "ja": "モジュールはオフライン",
+    "zh-Hant": "模組離線"
+  },
+  "启动服务": {
+    "en": "Start service",
+    "fr": "Démarrer le service",
+    "ja": "サービスを開始",
+    "zh-Hant": "啟動服務"
+  },
+  "停止服务": {
+    "en": "Stop service",
+    "fr": "Arrêter le service",
+    "ja": "サービスを停止",
+    "zh-Hant": "停止服務"
+  },
+  "显示窗口": {
+    "en": "Show window",
+    "fr": "Afficher la fenêtre",
+    "ja": "ウインドウを表示",
+    "zh-Hant": "顯示視窗"
+  },
+  "退出": {
+    "en": "Quit",
+    "fr": "Quitter",
+    "ja": "終了",
+    "zh-Hant": "結束"
+  },
+  "重试待推送短信": {
+    "en": "Retry pending notifications",
+    "fr": "Réessayer les notifications",
+    "ja": "未送信通知を再試行",
+    "zh-Hant": "重試待推播簡訊"
+  },
+  "已推送": {
+    "en": "Delivered",
+    "fr": "Envoyé",
+    "ja": "通知済み",
+    "zh-Hant": "已推播"
+  },
+  "待推送": {
+    "en": "Pending notification",
+    "fr": "Notification en attente",
+    "ja": "通知待ち",
+    "zh-Hant": "待推播"
+  },
+  "暂无记录": {
+    "en": "No records yet",
+    "fr": "Aucun élément",
+    "ja": "履歴はありません",
+    "zh-Hant": "尚無記錄"
+  },
+  "来电": {
+    "en": "Incoming call",
+    "fr": "Appel entrant",
+    "ja": "着信",
+    "zh-Hant": "來電"
+  },
+  "去电": {
+    "en": "Outgoing call",
+    "fr": "Appel sortant",
+    "ja": "発信",
+    "zh-Hant": "去電"
+  },
+  "未知号码": {
+    "en": "Unknown number",
+    "fr": "Numéro inconnu",
+    "ja": "不明な番号",
+    "zh-Hant": "未知號碼"
+  },
+  "秒": {
+    "en": "sec",
+    "fr": "s",
+    "ja": "秒",
+    "zh-Hant": "秒"
+  },
+  "unknown = 提交结果不明确，系统不会自动重发；sent = 模块已接受，非运营商送达回执。": {
+    "en": "Unknown: submission is uncertain; no automatic resend. Sent: accepted by modem, not a carrier delivery receipt.",
+    "fr": "Inconnu : résultat incertain, sans renvoi automatique. Envoyé : accepté par le module, pas un accusé opérateur.",
+    "ja": "不明：送信結果が不確実なため自動再送しません。送信済み：モジュールが受理した状態で、配信確認ではありません。",
+    "zh-Hant": "unknown 表示提交結果不確定，不會自動重送；sent 表示模組已接受，並非電信業者送達回條。"
+  },
+  "配置已保存": {
+    "en": "Settings saved",
+    "fr": "Réglages enregistrés",
+    "ja": "設定を保存しました",
+    "zh-Hant": "設定已儲存"
+  },
+  "Mac 服务已启动，正在连接模块与 SIP": {
+    "en": "Service started. Connecting modem and SIP.",
+    "fr": "Service démarré. Connexion du module et du SIP.",
+    "ja": "サービスを開始しました。モジュールと SIP に接続中です。",
+    "zh-Hant": "Mac 服務已啟動，正在連接模組與 SIP"
+  },
+  "正在停止服务与通话": {
+    "en": "Stopping service and calls",
+    "fr": "Arrêt du service et des appels",
+    "ja": "サービスと通話を停止中",
+    "zh-Hant": "正在停止服務與通話"
+  },
+  "已安排重试推送": {
+    "en": "Notification retry scheduled",
+    "fr": "Nouvel envoi programmé",
+    "ja": "通知の再試行を予約しました",
+    "zh-Hant": "已安排重試推播"
+  },
+  "客户端凭据已保存到钥匙串": {
+    "en": "Credential saved to Keychain",
+    "fr": "Identifiant enregistré dans le trousseau",
+    "ja": "認証情報をキーチェーンに保存しました",
+    "zh-Hant": "用戶端憑證已儲存到鑰匙圈"
+  },
+  "客户端凭据格式不正确": {
+    "en": "Invalid client credential",
+    "fr": "Identifiant du client invalide",
+    "ja": "認証情報の形式が正しくありません",
+    "zh-Hant": "用戶端憑證格式不正確"
+  },
+  "请先在接入配置中保存客户端凭据": {
+    "en": "Save the client credential in connection settings first",
+    "fr": "Enregistrez d’abord l’identifiant du client",
+    "ja": "接続設定で認証情報を保存してください",
+    "zh-Hant": "請先在連線設定中儲存用戶端憑證"
+  },
+  "云端请求失败": {
+    "en": "Cloud request failed",
+    "fr": "Échec de la requête cloud",
+    "ja": "クラウドへのリクエストに失敗しました",
+    "zh-Hant": "雲端請求失敗"
+  },
+  "找不到项目路径，请从源项目重新构建客户端": {
+    "en": "Project folder missing. Rebuild the client from source.",
+    "fr": "Dossier du projet introuvable. Recompilez le client.",
+    "ja": "プロジェクトが見つかりません。ソースから再ビルドしてください。",
+    "zh-Hant": "找不到專案路徑，請從原始專案重新建置用戶端"
+  },
+  "运行时安装配置缺失": {
+    "en": "Runtime installation settings missing",
+    "fr": "Configuration d’installation manquante",
+    "ja": "実行環境のインストール設定がありません",
+    "zh-Hant": "缺少執行環境安裝設定"
+  },
+  "模块服务仍在退出，请稍后重试": {
+    "en": "Service is still stopping. Try again shortly.",
+    "fr": "Le service s’arrête encore. Réessayez bientôt.",
+    "ja": "サービスの停止中です。後でもう一度お試しください。",
+    "zh-Hant": "模組服務仍在結束，請稍後重試"
+  },
+  "录音尚未归档或下载失败": {
+    "en": "Recording not archived or download failed",
+    "fr": "Enregistrement non archivé ou téléchargement échoué",
+    "ja": "録音が未保存、またはダウンロードに失敗しました",
+    "zh-Hant": "錄音尚未歸檔或下載失敗"
+  },
+  "录音已下载": {
+    "en": "Recording downloaded",
+    "fr": "Enregistrement téléchargé",
+    "ja": "録音をダウンロードしました",
+    "zh-Hant": "錄音已下載"
+  },
+  "录音已加入删除队列": {
+    "en": "Recording queued for deletion",
+    "fr": "Suppression de l’enregistrement programmée",
+    "ja": "録音の削除を予約しました",
+    "zh-Hant": "錄音已加入刪除佇列"
+  },
+  "已安排录音重试": {
+    "en": "Recording retry scheduled",
+    "fr": "Nouvel essai de l’enregistrement programmé",
+    "ja": "録音処理の再試行を予約しました",
+    "zh-Hant": "已安排錄音重試"
+  },
+  "删除这段录音？": {
+    "en": "Delete this recording?",
+    "fr": "Supprimer cet enregistrement ?",
+    "ja": "この録音を削除しますか？",
+    "zh-Hant": "刪除這段錄音？"
+  },
+  "将删除云端归档及仍存在的 Twilio 副本，无法恢复。": {
+    "en": "Deletes the archive and any remaining Twilio copy. This cannot be undone.",
+    "fr": "Supprime l’archive et toute copie Twilio restante. Cette action est irréversible.",
+    "ja": "アーカイブと残存する Twilio コピーを削除します。元に戻せません。",
+    "zh-Hant": "將刪除雲端歸檔與仍存在的 Twilio 副本，無法復原。"
+  },
+  "取消": {
+    "en": "Cancel",
+    "fr": "Annuler",
+    "ja": "キャンセル",
+    "zh-Hant": "取消"
+  },
+  "无法保存钥匙串凭据：": {
+    "en": "Unable to save Keychain credential: ",
+    "fr": "Impossible d’enregistrer dans le trousseau : ",
+    "ja": "キーチェーンへの保存に失敗しました：",
+    "zh-Hant": "無法儲存鑰匙圈憑證："
+  },
+  "操作未完成（退出码 %@），可根据日志修复后重试。": {
+    "en": "Operation failed (exit %@). Review the log and try again.",
+    "fr": "Échec (code %@). Consultez le journal et réessayez.",
+    "ja": "操作に失敗しました（終了コード %@）。ログを確認して再試行してください。",
+    "zh-Hant": "操作未完成（結束碼 %@），請參考記錄修復後重試。"
+  },
+  "排队中": {
+    "en": "Queued",
+    "fr": "En attente",
+    "ja": "待機中",
+    "zh-Hant": "排隊中"
+  },
+  "处理中": {
+    "en": "Running",
+    "fr": "En cours",
+    "ja": "処理中",
+    "zh-Hant": "處理中"
+  },
+  "已发送": {
+    "en": "Sent",
+    "fr": "Envoyé",
+    "ja": "送信済み",
+    "zh-Hant": "已傳送"
+  },
+  "结果不明确": {
+    "en": "Unknown result",
+    "fr": "Résultat inconnu",
+    "ja": "結果不明",
+    "zh-Hant": "結果不明確"
+  },
+  "失败": {
+    "en": "Failed",
+    "fr": "Échec",
+    "ja": "失敗",
+    "zh-Hant": "失敗"
+  },
+  "待归档": {
+    "en": "Pending archive",
+    "fr": "Archivage en attente",
+    "ja": "保存待ち",
+    "zh-Hant": "待歸檔"
+  },
+  "正在归档": {
+    "en": "Archiving",
+    "fr": "Archivage",
+    "ja": "保存中",
+    "zh-Hant": "正在歸檔"
+  },
+  "归档完成": {
+    "en": "Archived",
+    "fr": "Archivé",
+    "ja": "保存済み",
+    "zh-Hant": "歸檔完成"
+  },
+  "正在清理源副本": {
+    "en": "Removing source copy",
+    "fr": "Suppression de la source",
+    "ja": "元データを削除中",
+    "zh-Hant": "正在清除原始副本"
+  },
+  "正在删除": {
+    "en": "Deleting",
+    "fr": "Suppression",
+    "ja": "削除中",
+    "zh-Hant": "正在刪除"
+  },
+  "已删除": {
+    "en": "Deleted",
+    "fr": "Supprimé",
+    "ja": "削除済み",
+    "zh-Hant": "已刪除"
+  },
+  "已领取": {
+    "en": "Claimed",
+    "fr": "Pris en charge",
+    "ja": "取得済み",
+    "zh-Hant": "已領取"
+  },
+  "已接通": {
+    "en": "Connected",
+    "fr": "Connecté",
+    "ja": "接続済み",
+    "zh-Hant": "已接通"
+  },
+  "已结束": {
+    "en": "Ended",
+    "fr": "Terminé",
+    "ja": "終了",
+    "zh-Hant": "已結束"
+  },
+  "已过期": {
+    "en": "Expired",
+    "fr": "Expiré",
+    "ja": "期限切れ",
+    "zh-Hant": "已過期"
+  },
+  "发送测试通知": {
+    "en": "Send test notification",
+    "fr": "Envoyer une notification de test",
+    "ja": "テスト通知を送信",
+    "zh-Hant": "傳送測試通知"
+  },
+  "测试通知已送达 Gotify": {
+    "en": "Test notification delivered to Gotify",
+    "fr": "Notification de test remise à Gotify",
+    "ja": "Gotify にテスト通知を送信しました",
+    "zh-Hant": "測試通知已送達 Gotify"
+  },
+  "Gotify 推送失败": {
+    "en": "Gotify notification failed",
+    "fr": "Échec de notification Gotify",
+    "ja": "Gotify 通知に失敗しました",
+    "zh-Hant": "Gotify 推播失敗"
+  },
+  "检查 macOS 与编译工具": {
+    "en": "Checking macOS and build tools",
+    "fr": "Vérification de macOS et des outils",
+    "ja": "macOS とビルドツールを確認",
+    "zh-Hant": "檢查 macOS 與建置工具"
+  },
+  "检查 Python、libusb 与 pyusb": {
+    "en": "Checking Python, libusb and pyusb",
+    "fr": "Vérification de Python, libusb et pyusb",
+    "ja": "Python、libusb、pyusb を確認",
+    "zh-Hant": "檢查 Python、libusb 與 pyusb"
+  },
+  "检查 Go 与 Git": {
+    "en": "Checking Go and Git",
+    "fr": "Vérification de Go et Git",
+    "ja": "Go と Git を確認",
+    "zh-Hant": "檢查 Go 與 Git"
+  },
+  "依赖已就绪；客户端运行不依赖 Node.js": {
+    "en": "Dependencies ready; the client does not require Node.js",
+    "fr": "Dépendances prêtes ; Node.js n’est pas requis",
+    "ja": "依存関係の準備完了。Node.js は不要です",
+    "zh-Hant": "相依套件已就緒；用戶端執行不需要 Node.js"
+  },
+  "安装或确认 Python、Go、libusb": {
+    "en": "Installing or checking Python, Go and libusb",
+    "fr": "Installation ou vérification de Python, Go et libusb",
+    "ja": "Python、Go、libusb をインストールまたは確認",
+    "zh-Hant": "安裝或確認 Python、Go、libusb"
+  },
+  "安装隔离的 Python 依赖": {
+    "en": "Installing isolated Python dependencies",
+    "fr": "Installation des dépendances Python isolées",
+    "ja": "隔離した Python 依存関係をインストール",
+    "zh-Hant": "安裝隔離的 Python 相依套件"
+  },
+  "构建 Go、CoreAudio 和原生客户端": {
+    "en": "Building Go, CoreAudio and native client",
+    "fr": "Compilation de Go, CoreAudio et du client",
+    "ja": "Go、CoreAudio とアプリをビルド",
+    "zh-Hant": "建置 Go、CoreAudio 與原生用戶端"
+  },
+  "安装完成；请在向导中重启客户端": {
+    "en": "Installed; restart the client from the assistant",
+    "fr": "Installé ; redémarrez depuis l’assistant",
+    "ja": "完了しました。アシスタントから再起動してください",
+    "zh-Hant": "安裝完成；請在精靈中重新啟動用戶端"
+  },
+  "获取 GitHub main 更新": {
+    "en": "Fetching GitHub main updates",
+    "fr": "Récupération des mises à jour GitHub main",
+    "ja": "GitHub main の更新を取得",
+    "zh-Hant": "取得 GitHub main 更新"
+  },
+  "当前项目已是最新版本": {
+    "en": "The project is up to date",
+    "fr": "Le projet est à jour",
+    "ja": "プロジェクトは最新です",
+    "zh-Hant": "目前專案已是最新版本"
+  },
+  "发现项目更新，可安装更新": {
+    "en": "Project update available",
+    "fr": "Mise à jour du projet disponible",
+    "ja": "プロジェクトの更新があります",
+    "zh-Hant": "發現專案更新，可安裝更新"
+  }
+}
