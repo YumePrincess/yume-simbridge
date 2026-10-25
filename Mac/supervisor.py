@@ -75,6 +75,7 @@ voice=False
 try:
     if not voice_runtime.runtime_installed()[0]:
         voice_runtime.provision_runtime()
+    voice_runtime.stop_voice_route()
     voice_runtime.ensure_voice_route(force=True)
     voice=True
 except Exception as e:

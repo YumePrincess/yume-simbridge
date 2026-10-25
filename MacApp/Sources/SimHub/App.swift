@@ -154,7 +154,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27005")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27006")"
   }
   func setup(_ mode: String) async {
     guard !setupBusy else { return }
@@ -647,7 +647,7 @@ struct Content: View {
             Text(L("sms@example.com · 主题填 +国际号码或本地号码，纯文本正文为短信")).font(.caption).textSelection(
               .enabled)
             TextField(L("允许的发件人（逗号分隔）"), text: $model.senderText)
-            Text(L("要求 Cloudflare 验证 DMARC 通过；Mac 离线时任务会排队。")).font(.caption).foregroundStyle(
+            Text(L("邮件须通过发件人签名验证；Mac 离线时任务会排队。")).font(.caption).foregroundStyle(
               .secondary)
           }
           HStack {

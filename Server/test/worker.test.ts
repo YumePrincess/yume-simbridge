@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-import { timingSafeEqual, randomBytes, createHmac } from "node:crypto";
+import {
+  timingSafeEqual,
+  randomBytes,
+  createHmac,
+  generateKeyPairSync,
+} from "node:crypto";
 import worker from "../src/index";
 import { defaults, saveConfig, hashPin, publicConfig } from "../src/config";
 import { cryptChunk } from "../src/recording-crypto";
 import { recordingTasks, recordingCallback } from "../src/recordings";
 import { receive } from "../src/email";
+import { dkimSign } from "mailauth/lib/dkim/sign";
 class DB {
   db = new DatabaseSync(":memory:");
   constructor() {
@@ -274,58 +280,113 @@ describe("recording integrity and deletion", () => {
     expect(row.lease).toBeNull();
   });
 });
-describe("email-to-SMS", () => {
-  async function mail(auth: string, from = "sender@example.com") {
-    const raw = new TextEncoder().encode(
-      `From: ${from}\r\nTo: sms@example.com\r\nSubject: +12025550123\r\nAuthentication-Results: ${auth}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n你好 SMS`,
-    );
-    const reject = vi.fn();
-    const msg = {
-      from,
-      to: env.EMAIL_ADDRESS,
-      rawSize: raw.length,
-      raw: new ReadableStream({
-        start(c) {
-          c.enqueue(raw);
-          c.close();
+describe("email-to-SMS DKIM", () => {
+  const key = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const publicKey = key.publicKey
+    .export({ type: "spki", format: "der" })
+    .toString("base64");
+  async function signed(
+    options: { domain?: string; headers?: string; maxBodyLength?: number } = {},
+  ) {
+    const body =
+      "From: sender@example.com\r\nTo: sms@example.com\r\nSubject: 10086\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n你好 SMS\r\n";
+    const signature = await dkimSign(Buffer.from(body), {
+      signatureData: [
+        {
+          signingDomain: options.domain || "yume.zone",
+          selector: "sig1",
+          privateKey: key.privateKey.export({ type: "pkcs8", format: "pem" }),
+          headerList: options.headers || "from:to:subject:content-type",
+          maxBodyLength: options.maxBodyLength,
         },
-      }),
-      setReject: reject,
-    } as unknown as ForwardableEmailMessage;
-    await receive(msg, env);
+      ],
+    });
+    return signature.signatures + body;
+  }
+  async function mail(raw: string, from = "sender@example.com") {
+    const bytes = Buffer.from(raw);
+    const reject = vi.fn();
+    await receive(
+      {
+        from,
+        to: env.EMAIL_ADDRESS,
+        rawSize: bytes.length,
+        headers: new Headers(),
+        raw: new ReadableStream({
+          start(c) {
+            c.enqueue(bytes);
+            c.close();
+          },
+        }),
+        setReject: reject,
+      } as ForwardableEmailMessage,
+      env,
+    );
     return reject;
   }
-  it("accepts authenticated allowed mail and deduplicates MIME delivery", async () => {
+  function dns() {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            Status: 0,
+            Answer: [
+              {
+                type: 16,
+                data: JSON.stringify("v=DKIM1; k=rsa; p=" + publicKey),
+              },
+            ],
+          }),
+        ),
+    );
+  }
+
+  it("accepts and deduplicates an aligned signed iCloud-style email without Authentication-Results", async () => {
+    dns();
+    const raw = await signed();
+    expect(await mail(raw)).not.toHaveBeenCalled();
+    expect(await mail(raw)).not.toHaveBeenCalled();
+    const rows = await db.prepare("SELECT payload FROM jobs").all();
+    expect(rows.results).toHaveLength(1);
     expect(
-      await mail("mx.cloudflare.net; dmarc=pass header.from=yume.zone"),
-    ).not.toHaveBeenCalled();
-    await mail("mx.cloudflare.net; dmarc=pass header.from=yume.zone");
-    expect(
-      (
-        (await db.prepare("SELECT count(*) n FROM jobs").first()) as {
-          n: number;
-        }
-      ).n,
-    ).toBe(1);
+      JSON.parse((rows.results[0] as { payload: string }).payload).to,
+    ).toBe("10086");
   });
-  it("rejects spoofed sender, forged authentication service, or failed DMARC", async () => {
+  it("does not trust a forged authentication result without a signature", async () => {
+    const raw =
+      "From: sender@example.com\r\nTo: sms@example.com\r\nSubject: 10086\r\nAuthentication-Results: mx.cloudflare.net; dmarc=pass header.from=yume.zone\r\nContent-Type: text/plain\r\n\r\ntest";
+    expect(await mail(raw)).toHaveBeenCalled();
+  });
+  it("rejects altered body, altered target, unaligned signer and unapproved sender", async () => {
+    dns();
+    const raw = await signed();
+    for (const changed of [
+      raw.replace("你好 SMS", "changed"),
+      raw.replace("Subject: 10086", "Subject: 10010"),
+      await signed({ domain: "attacker.net" }),
+    ])
+      expect(await mail(changed)).toHaveBeenCalled();
+    expect(await mail(raw, "sender@example.com")).toHaveBeenCalled();
+  });
+  it("rejects unsigned command headers and partial-body signatures", async () => {
+    dns();
     expect(
-      await mail("attacker.net; dmarc=pass header.from=yume.zone"),
+      await mail(await signed({ headers: "from:to:content-type" })),
     ).toHaveBeenCalled();
-    expect(
-      await mail("mx.cloudflare.net; dmarc=fail header.from=yume.zone"),
-    ).toHaveBeenCalled();
+    expect(await mail(await signed({ maxBodyLength: 1 }))).toHaveBeenCalled();
+  });
+  it("rejects an unbound recipient and fails closed on DNS failure", async () => {
+    dns();
     expect(
       await mail(
-        "mx.cloudflare.net; dmarc=pass header.from=yume.zone.attacker.net",
+        (await signed()).replace(
+          "To: sms@example.com",
+          "To: sender@example.com",
+        ),
       ),
     ).toHaveBeenCalled();
-    expect(
-      await mail(
-        "mx.cloudflare.net; dmarc=pass header.from=other.zone",
-        "attacker@other.zone",
-      ),
-    ).toHaveBeenCalled();
+    vi.mocked(fetch).mockRejectedValue(new Error("DNS unavailable"));
+    expect(await mail(await signed())).toHaveBeenCalled();
   });
 });
 

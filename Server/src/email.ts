@@ -2,6 +2,7 @@ import PostalMime from "postal-mime";
 import { config, cellularNumber } from "./config";
 import { enqueue, limit } from "./store";
 import { readBytes, enc } from "./util";
+import { verifySenderDKIM } from "./mail-auth";
 export async function receive(message: ForwardableEmailMessage, env: Env) {
   try {
     const c = await config(env);
@@ -21,39 +22,30 @@ export async function receive(message: ForwardableEmailMessage, env: Env) {
     const mail = await PostalMime.parse(raw);
     if (mail.from?.address?.toLowerCase() !== message.from.toLowerCase())
       throw Error("Envelope sender does not match From");
-    // Only the first authentication result added by Cloudflare is trusted.
-    const auth =
-      mail.headers.find((h) => h.key === "authentication-results")?.value || "";
-    const domain = message.from.toLowerCase().split("@")[1];
-    const dmarc = auth.split(";").find((s) => /^\s*dmarc=/i.test(s)) || "";
-    const authenticatedDomain = dmarc.match(
-      /\bheader\.from=(?:"([^"]+)"|([^\s;]+))/i,
-    );
     if (
-      !/^mx\.cloudflare\.net\s*;/i.test(auth) ||
-      !/^\s*dmarc=pass\b/i.test(dmarc) ||
-      (
-        authenticatedDomain?.[1] ||
-        authenticatedDomain?.[2] ||
-        ""
-      ).toLowerCase() !== domain
+      !mail.to?.some(
+        (recipient) =>
+          "address" in recipient &&
+          recipient.address?.toLowerCase() === env.EMAIL_ADDRESS,
+      )
     )
-      throw Error("Cloudflare DMARC authentication required");
+      throw Error("Signed To must include the SMS email address");
+    const signatures = mail.headers.filter(
+      (header) => header.key === "dkim-signature",
+    );
+    if (!signatures.length || signatures.length > 4)
+      throw Error("Sender DKIM authentication required");
+    const signatureId = await verifySenderDKIM(raw, message.from);
     const to = cellularNumber(mail.subject?.trim());
     const body = mail.text?.trim();
     if (!body || body.length > 2000)
       throw Error("Use text/plain body, 1–2000 characters");
     await limit(env, "email:" + message.from, 30, 3600);
-    const identity = mail.messageId
-      ? enc.encode(
-          JSON.stringify([
-            message.from.toLowerCase(),
-            to,
-            body,
-            mail.messageId,
-          ]),
-        )
-      : raw;
+    // The verified signature binds the command and the complete body. Replays with
+    // different unsigned MIME headers must not create a second SMS job.
+    const identity = enc.encode(
+      JSON.stringify([message.from.toLowerCase(), signatureId]),
+    );
     const digest = await crypto.subtle.digest("SHA-256", identity);
     const id =
       "mail-" +

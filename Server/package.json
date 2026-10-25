@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "jose": "^6.2.13",
+    "mailauth": "8.0.0",
     "postal-mime": "^2.6.0"
   },
   "devDependencies": {
@@ -23,7 +24,7 @@
     "vitest": "latest",
     "wrangler": "latest"
   },
-  "build": 27005,
+  "build": 27006,
   "overrides": {
     "undici": "^7.30.1"
   }

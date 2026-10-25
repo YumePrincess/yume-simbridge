@@ -600,9 +600,8 @@ def _start_voice_route():
 def stop_voice_route():
     """通话结束后拆除语音路由（保留 mixer 状态回滚逻辑）。"""
     with _state['lock']:
-        if not _state['ready']:
-            _state['detail'] = ''
-            return
+        # Each route reset is a fresh process: in-memory readiness is not evidence
+        # that the module's owned helper has stopped. Verify its PID/start time.
         try:
             adb = ADBClient()
         except ADBError as e:

@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27005"
+var Build = "27006"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -584,8 +584,29 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 	errCh := make(chan error, 2)
 	bridgeCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	var fromSIP, toModem, fromModem, toSIP atomic.Int64
+	slog.Info("audio bridge started", "codec", props.Codec.PayloadType)
+	report := func() {
+		health := map[string]any{"updated": time.Now().UnixMilli(), "sipDecodedBytes": fromSIP.Load(), "usbPlaybackBytes": toModem.Load(), "usbCaptureBytes": fromModem.Load(), "sipEncodedBytes": toSIP.Load()}
+		writeHealth(filepath.Join(e.healthDir, "call-media.json"), health)
+		slog.Info("audio bridge counters", "sip_to_mac", fromSIP.Load(), "mac_to_usb", toModem.Load(), "usb_to_mac", fromModem.Load(), "mac_to_sip", toSIP.Load())
+	}
+	defer report()
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(5 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-bridgeCtx.Done():
+				return
+			case <-t.C:
+				report()
+			}
+		}
+	}()
 	go func() {
 		defer wg.Done()
 		buf := make([]byte, 6400)
@@ -596,7 +617,10 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 				return
 			}
 			if n > 0 {
-				if _, err = tx.Write(buf[:n]); err != nil && !errors.Is(err, syscall.EAGAIN) {
+				fromSIP.Add(int64(n))
+				written, writeErr := tx.Write(buf[:n])
+				toModem.Add(int64(written))
+				if err = writeErr; err != nil && !errors.Is(err, syscall.EAGAIN) {
 					errCh <- err
 					return
 				}
@@ -622,7 +646,10 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 				if n < 0 {
 					n = 0
 				}
-				if _, err = encoder.Write(buf); err != nil {
+				fromModem.Add(int64(n))
+				encoded, writeErr := encoder.Write(buf)
+				toSIP.Add(int64(encoded))
+				if err = writeErr; err != nil {
 					errCh <- err
 					return
 				}
@@ -641,5 +668,8 @@ func (e *engine) bridge(ctx, dialogCtx context.Context, med *diago.DialogMedia, 
 	_ = rx.Close()
 	_ = tx.Close()
 	wg.Wait()
+	if err != nil && !errors.Is(err, context.Canceled) {
+		slog.Warn("audio bridge ended", "error", err)
+	}
 	return err
 }

@@ -14,3 +14,5 @@
 - Let macOS load the bundle icon; do not override NSApp.applicationIconImage. Keep menu localization event-driven and idempotent; no polling timers or menu.update() feedback loops.
 
 - Do not add a menu-bar status item. Closing the main window must keep the app and service alive in the Dock; quit must stop the owned runtime before the app exits.
+
+- A fresh Python route-reset process must inspect the actual owned module helper; never use in-memory ready=False to skip cleanup. Email authentication must verify original aligned DKIM signatures rather than trusting Authentication-Results header text.

@@ -119,12 +119,6 @@
     "ja": "許可する送信者（カンマ区切り）",
     "zh-Hant": "允許的寄件者（逗號分隔）"
   },
-  "要求 Cloudflare 验证 DMARC 通过；Mac 离线时任务会排队。": {
-    "en": "Cloudflare DMARC verification is required. Jobs queue while the Mac is offline.",
-    "fr": "La validation DMARC Cloudflare est requise. Les tâches attendent si le Mac est hors ligne.",
-    "ja": "Cloudflare の DMARC 検証が必要です。Mac がオフラインの場合は待機します。",
-    "zh-Hant": "需要通過 Cloudflare DMARC 驗證；Mac 離線時工作會排隊。"
-  },
   "保存配置": {
     "en": "Save settings",
     "fr": "Enregistrer les réglages",
@@ -856,5 +850,11 @@
     "fr": "Indisponible",
     "ja": "利用不可",
     "zh-Hant": "無法使用"
+  },
+  "邮件须通过发件人签名验证；Mac 离线时任务会排队。": {
+    "en": "Sender signature verification is required. Jobs queue while the Mac is offline.",
+    "fr": "La signature de l’expéditeur doit être valide. Les tâches attendent si le Mac est hors ligne.",
+    "ja": "送信者の署名検証が必要です。Mac がオフラインの場合は待機します。",
+    "zh-Hant": "郵件須通過寄件者簽章驗證；Mac 離線時工作會排隊。"
   }
 }

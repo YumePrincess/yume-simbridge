@@ -3,6 +3,7 @@
   "name": "yume-simhub",
   "account_id": "8945f9d46f2b03639bc88d37424f1052",
   "main": "src/index.ts",
+  "alias": { "tldts": "./node_modules/tldts/dist/cjs/index.js" },
   "compatibility_date": "2026-10-25",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,

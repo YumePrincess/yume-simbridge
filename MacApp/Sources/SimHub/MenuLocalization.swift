@@ -96,6 +96,7 @@ import AppKit
   private static func apply(_ item: NSMenuItem, language: String, top: Bool) {
     let key = titles.keys.first {
       $0 == item.title || titles[$0]?.values.contains(item.title) == true
+        || ["顯示方式": "View", "輔助說明": "Help"][item.title] == $0
     }
     if let key {
       let title = language == "en" ? key : titles[key]?[language] ?? key

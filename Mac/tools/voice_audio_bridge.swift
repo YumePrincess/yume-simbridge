@@ -294,6 +294,14 @@ final class FifoLink {
     let label: String
     var totalFrames: UInt64 = 0
     var droppedBytes: UInt64 = 0
+    private let metricsLock = NSLock()
+    private var transferredBytes: UInt64 = 0
+    func recordTransfer(_ bytes: Int) {
+        metricsLock.lock(); transferredBytes += UInt64(max(bytes, 0)); metricsLock.unlock()
+    }
+    func transferCount() -> UInt64 {
+        metricsLock.lock(); defer { metricsLock.unlock() }; return transferredBytes
+    }
     // 上次成功把数据写进 rx FIFO 的时刻。写入成功 ⇔ 网关正在取流 ⇔ 通话进行中；
     // EAGAIN（计入 droppedBytes）⇔ 网关没在取流 ⇔ 空闲。空闲挂起靠它判定。
     var lastDrainAt: CFAbsoluteTime = 0
@@ -328,6 +336,7 @@ private func fifoCaptureCallback(_ inRefCon: UnsafeMutableRawPointer, _ ioAction
         link.droppedBytes += UInt64(byteCount - written)  // EAGAIN：网关没在取流
         break
     }
+    link.recordTransfer(written)
     if written > 0 { link.lastDrainAt = CFAbsoluteTimeGetCurrent() }  // 网关在取流 → 通话中
     link.totalFrames += UInt64(inNumberFrames)
     return noErr
@@ -379,6 +388,7 @@ private func fifoPlaybackCallback(_ inRefCon: UnsafeMutableRawPointer, _ ioActio
         if n > 0 { got += n; continue }
         break  // EAGAIN / EOF：补零即可
     }
+    link.recordTransfer(got)
     link.totalFrames += UInt64(inNumberFrames)
     return noErr
 }
@@ -485,6 +495,7 @@ func runFifoMode(acDevice: AudioDeviceID, asDevice: AudioDeviceID, rxPath: Strin
     let minRunSeconds = 3.0   // 恢复后至少运行这么久，避免边界抖动
 
     var unitsRunning = true
+    var resumeFailed = false
     var lastDrain = CFAbsoluteTimeGetCurrent()
     var lastResume = CFAbsoluteTimeGetCurrent()
     var suspendCount = 0
@@ -495,7 +506,7 @@ func runFifoMode(acDevice: AudioDeviceID, asDevice: AudioDeviceID, rxPath: Strin
         if let healthPath = argValue("--health") {
             let devices = getDevices().map { $0.id }
             let alive = devices.contains(acDevice) && devices.contains(asDevice)
-            let payload: [String: Any] = ["updated": Int64(Date().timeIntervalSince1970 * 1000), "ready": alive]
+            let payload: [String: Any] = ["updated": Int64(Date().timeIntervalSince1970 * 1000), "ready": alive && !resumeFailed, "unitsRunning": unitsRunning, "captureBytes": rxLink.transferCount(), "playbackBytes": txLink.transferCount()]
             if let bytes = try? JSONSerialization.data(withJSONObject: payload) {
                 try? bytes.write(to: URL(fileURLWithPath: healthPath), options: .atomic)
             }
@@ -520,13 +531,13 @@ func runFifoMode(acDevice: AudioDeviceID, asDevice: AudioDeviceID, rxPath: Strin
                 drainTxFifo()
                 if startUnits() {
                     unitsRunning = true
+                    resumeFailed = false
                     lastResume = now
                     lastDrain = now
                     FileHandle.standardError.write("[idle] 检测到通话音频，AudioUnit 已恢复\n".data(using: .utf8)!)
                 } else {
-                    // 恢复失败：永久退回常开模式，绝不牺牲通话能力
-                    idleSuspend = false
-                    FileHandle.standardError.write("[idle] AudioUnit 恢复失败，退回常开模式（不再挂起）\n".data(using: .utf8)!)
+                    resumeFailed = true
+                    FileHandle.standardError.write("[idle] AudioUnit 恢复失败，保持未就绪并重试\n".data(using: .utf8)!)
                 }
             }
         }
