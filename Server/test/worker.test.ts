@@ -21,6 +21,7 @@ class DB {
     this.db.exec(readFileSync("migrations/0003_notifications.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0004_totp.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0005_forward_screen.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0006_deferred_answer.sql", "utf8"));
   }
   prepare(sql: string) {
     const stmt = this.db.prepare(sql);
@@ -870,6 +871,7 @@ describe("private press-one forwarding screen", () => {
   async function startScreen(seconds = 10) {
     await saveConfig(env, {
       ...(await (await import("../src/config")).config(env)),
+      incomingAnswerMode: "waiting",
       forwardConfirmSeconds: seconds,
     });
     const incoming = (await (
@@ -992,8 +994,13 @@ describe("private press-one forwarding screen", () => {
         ).status,
       ).toBe(200);
     expect(
-      (await edge("/edge/settings", { forwardConfirmEnabled: false }, "PUT"))
-        .status,
+      (
+        await edge(
+          "/edge/settings",
+          { forwardConfirmEnabled: false, incomingAnswerMode: "waiting" },
+          "PUT",
+        )
+      ).status,
     ).toBe(200);
     const incoming = (await (
       await edge("/edge/incoming", { from: "02200000000" })
@@ -1050,4 +1057,105 @@ describe("forward confirmation language", () => {
       expect(body.match(/<Say /g)).toHaveLength(1);
     },
   );
+});
+
+describe("deferred SIM pickup and cancellation", () => {
+  const child = "CA" + "c".repeat(32);
+  const fields = { CallSid: child, ParentCallSid: sid, To: "+12025550123" };
+  const screen = "/twilio/forward-screen?parent=" + sid;
+  const confirm = "/twilio/forward-confirm?parent=" + sid;
+  async function start() {
+    const ticket = (await (
+      await edge("/edge/incoming", { from: "02200000000" })
+    ).json()) as { id: string; answerMode: string };
+    expect(ticket.answerMode).toBe("confirmed");
+    await webhook("/twilio/cellular", {
+      From: "sip:incoming@test.sip.twilio.com",
+      "SipHeader_X-Bridge": ticket.id,
+    });
+    return ticket.id;
+  }
+  async function ready(id: string) {
+    return (
+      (await (await edge("/edge/incoming-ready", { id })).json()) as {
+        accepted: boolean;
+      }
+    ).accepted;
+  }
+  it("defaults to deferred pickup and only authorizes the confirmed ticket", async () => {
+    const id = await start();
+    expect(await ready(id)).toBe(false);
+    await webhook(screen, fields);
+    expect(await ready(id)).toBe(false);
+    await webhook(confirm, { ...fields, Digits: "1" });
+    expect(await ready(id)).toBe(true);
+    expect(await ready("another-ticket")).toBe(false);
+    await db.prepare("UPDATE forward_screens SET expires=0").run();
+    expect(await ready(id)).toBe(false);
+  });
+  it.each(["", "2"])(
+    "does not authorize failed confirmation: %s",
+    async (digits) => {
+      const id = await start();
+      await webhook(screen, fields);
+      await webhook(confirm, { ...fields, Digits: digits });
+      expect(await ready(id)).toBe(false);
+      const done = await (
+        await webhook("/twilio/forward-done", {
+          DialCallStatus: "completed",
+          DialBridged: "false",
+        })
+      ).text();
+      expect(done).toContain("<Hangup/>");
+      expect(done).not.toContain("<Say");
+    },
+  );
+  it("tracks target answer even with press-one disabled", async () => {
+    await edge("/edge/settings", { forwardConfirmEnabled: false }, "PUT");
+    const id = await start();
+    expect(await ready(id)).toBe(false);
+    expect(await (await webhook(screen, fields)).text()).not.toContain(
+      "<Gather",
+    );
+    expect(await ready(id)).toBe(true);
+  });
+  it.each(["failed", "ended"])(
+    "closes screening and the Twilio parent on cellular teardown: %s",
+    async (status) => {
+      const id = await start();
+      await webhook(screen, fields);
+      const request = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("{}"));
+      expect((await edge("/edge/call-event", { id, status })).status).toBe(200);
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0][0]).toBe(
+        `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls/${sid}.json`,
+      );
+      expect(String(request.mock.calls[0][1]?.body)).toBe("Status=completed");
+      expect(
+        await (await webhook(confirm, { ...fields, Digits: "1" })).text(),
+      ).toContain("<Hangup/>");
+      expect(await ready(id)).toBe(false);
+    },
+  );
+  it("pins answer mode to the call despite a setting change", async () => {
+    const id = await start();
+    await edge("/edge/settings", { incomingAnswerMode: "waiting" }, "PUT");
+    await webhook(screen, fields);
+    await webhook(confirm, { ...fields, Digits: "1" });
+    expect(await ready(id)).toBe(true);
+    const done = await (
+      await webhook("/twilio/forward-done", {
+        DialCallStatus: "failed",
+        DialBridged: "false",
+      })
+    ).text();
+    expect(done).not.toContain("<Say");
+    expect(await ready(id)).toBe(false);
+    expect(
+      (await edge("/edge/settings", { incomingAnswerMode: "invalid" }, "PUT"))
+        .status,
+    ).toBe(400);
+  });
 });

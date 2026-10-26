@@ -43,6 +43,15 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
     const notConfirmed =
       path === "/twilio/forward-done" &&
       (await unconfirmedForward(env, sid, fields.DialBridged));
+    const deferred =
+      path === "/twilio/forward-done" &&
+      !!(await env.DB.prepare(
+        "SELECT id FROM jobs WHERE kind='incoming' AND json_extract(payload,'$.callSid')=? AND json_extract(payload,'$.answerMode')='confirmed'",
+      )
+        .bind(sid)
+        .first());
+    // An unanswered SIM cannot hear our failure announcement; never answer it for that.
+    if (deferred) return response("<Hangup/>");
     // Network answer is not enough: a screened destination must confirm and bridge.
     if (
       ["busy", "no-answer", "failed", "canceled"].includes(
@@ -63,23 +72,25 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       return hang("offline");
     const ticket = fields["SipHeader_X-Bridge"] || "";
     const job = await env.DB.prepare(
-      "UPDATE jobs SET status='connected',updated=?,payload=json_set(payload,'$.callSid',?,'$.to',?) WHERE id=? AND kind='incoming' AND status='queued' AND created>? RETURNING id",
+      "UPDATE jobs SET status='running',updated=?,payload=json_set(payload,'$.callSid',?,'$.to',?) WHERE id=? AND kind='incoming' AND status='queued' AND created>? RETURNING id,payload",
     )
       .bind(now(), sid, c.forwardTo, ticket, now() - 60000)
-      .first();
+      .first<{ id: string; payload: string }>();
     if (!job) return hang("expired");
+    const deferred = JSON.parse(job.payload).answerMode === "confirmed";
     let numberAttributes = "";
-    if (c.forwardConfirmEnabled) {
+    if (c.forwardConfirmEnabled || deferred) {
       await env.DB.prepare(
-        "INSERT INTO forward_screens(parent_sid,target,wait_seconds,service_language,expires,updated) VALUES(?,?,?,?,?,?)",
+        "INSERT INTO forward_screens(parent_sid,target,wait_seconds,service_language,expires,updated,require_confirm) VALUES(?,?,?,?,?,?,?)",
       )
         .bind(
           sid,
           c.forwardTo,
           c.forwardConfirmSeconds,
           c.serviceLanguage,
-          now() + 120000,
+          now() + 150000,
           now(),
+          c.forwardConfirmEnabled ? 1 : 0,
         )
         .run();
       numberAttributes = ` url="${xml(`${env.PUBLIC_ORIGIN}/twilio/forward-screen?parent=${encodeURIComponent(sid)}`)}" method="POST"`;

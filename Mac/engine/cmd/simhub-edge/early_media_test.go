@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -130,4 +131,85 @@ func TestCarrierAudioBeforeAnswerAndAfterPromotion(t *testing.T) {
 	}
 	verifyAudio(0x42)
 	_ = d.Hangup(ctx)
+}
+
+// Cancellation during ringing or private 183 media must reach the real SIP
+// peer as CANCEL, rather than only closing local sockets.
+func TestIncomingCancellationStopsRemoteWaitingLeg(t *testing.T) {
+	for _, early := range []bool{false, true} {
+		t.Run(fmt.Sprint("early=", early), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			endpoint := func() (*diago.Diago, int) {
+				socket, err := net.ListenPacket("udp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				port := socket.LocalAddr().(*net.UDPAddr).Port
+				socket.Close()
+				ua, err := sipgo.NewUA()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { ua.Close() })
+				return diago.NewDiago(ua, diago.WithTransport(diago.Transport{Transport: "udp", BindHost: "127.0.0.1", BindPort: port})), port
+			}
+			server, port := endpoint()
+			client, _ := endpoint()
+			waiting := make(chan struct{})
+			ended := make(chan struct{})
+			err := server.ServeBackground(ctx, func(d *diago.DialogServerSession) {
+				defer d.Close()
+				if early {
+					m, err := d.ProgressMedia(diago.ProgressMediaOptions{})
+					if err != nil {
+						return
+					}
+					defer m.Close()
+				} else {
+					_ = d.Ringing()
+				}
+				close(waiting)
+				<-d.Context().Done()
+				close(ended)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := client.ServeBackground(ctx, nil); err != nil {
+				t.Fatal(err)
+			}
+			dialCtx, stop := context.WithCancel(ctx)
+			result := make(chan error, 1)
+			go func() {
+				d, m, err := client.Invite(dialCtx, sip.Uri{User: "incoming", Host: "127.0.0.1", Port: port}, diago.InviteOptions{})
+				if d != nil {
+					defer d.Close()
+				}
+				if m != nil {
+					defer m.Close()
+				}
+				result <- err
+			}()
+			select {
+			case <-waiting:
+			case <-ctx.Done():
+				t.Fatal("peer never rang")
+			}
+			stop()
+			select {
+			case <-ended:
+			case <-ctx.Done():
+				t.Fatal("CANCEL did not stop remote leg")
+			}
+			select {
+			case err := <-result:
+				if err == nil {
+					t.Fatal("cancelled dial unexpectedly answered")
+				}
+			case <-ctx.Done():
+				t.Fatal("dial did not finish")
+			}
+		})
+	}
 }

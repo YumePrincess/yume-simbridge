@@ -10,6 +10,7 @@ struct Settings: Codable {
   var authMode: String? = "password"
   var totpConfigured: Bool? = false
   var forwardTo = "+12025550123"
+  var incomingAnswerMode: String? = "confirmed"
   var forwardConfirmEnabled: Bool? = true
   var forwardConfirmSeconds: Int? = 10
   var gotifyUrl = "https://gotify.example.com"
@@ -654,6 +655,16 @@ struct Content: View {
               .secondary)
             TextField(L("SIM 来电转接号码"), text: $model.settings.forwardTo)
             Toggle(L("启用 SIM 来电 → Twilio → 目标号码"), isOn: $model.settings.inboundEnabled)
+            Picker(L("模块来电接听模式"), selection: Binding(
+              get: { model.settings.incomingAnswerMode ?? "confirmed" },
+              set: { model.settings.incomingAnswerMode = $0 })) {
+              Text(L("目标方确认后接听（默认）")).tag("confirmed")
+              Text(L("先接听并播放提示和音乐")).tag("waiting")
+            }
+            Text(L(model.settings.incomingAnswerMode == "waiting"
+              ? "模块先接听，播放中英文接通提示和等待音乐；失败时播放中英文提示。"
+              : "模块保持振铃，目标方确认后才接听；等待时为运营商回铃音，不播放音乐或自定义失败提示，等待受运营商时限影响。"))
+              .font(.caption).foregroundStyle(.secondary)
             Toggle(L("转接接听后按 1 确认"), isOn: Binding(
               get: { model.settings.forwardConfirmEnabled ?? true },
               set: { model.settings.forwardConfirmEnabled = $0 }))
@@ -663,7 +674,7 @@ struct Content: View {
                 set: { model.settings.forwardConfirmSeconds = $0 }), in: 1...60) {
                 HStack { Text(L("确认等待时长（秒）")); Spacer(); Text("\(model.settings.forwardConfirmSeconds ?? 10)").monospacedDigit() }
               }
-              Text(L("接听者须在服务语言提示结束后设定秒数内按 1；等待期间来电者听到等待音乐，语音信箱声音不会转播。"))
+              Text(L("接听者须在服务语言提示结束后设定秒数内按 1；确认前不会转播目标方的声音。"))
                 .font(.caption).foregroundStyle(.secondary)
             } else {
               Text(L("关闭按键确认后，转接号码的语音信箱可能直接接通。"))

@@ -7,6 +7,7 @@ export type Config = {
   totpSecret: string;
   serviceLanguage: ServiceLanguage;
   forwardTo: string;
+  incomingAnswerMode: "confirmed" | "waiting";
   forwardConfirmEnabled: boolean;
   forwardConfirmSeconds: number;
   gotifyUrl: string;
@@ -27,6 +28,7 @@ export const defaults: Config = {
   totpSecret: "",
   serviceLanguage: "en",
   forwardTo: "+12025550123",
+  incomingAnswerMode: "confirmed",
   forwardConfirmEnabled: true,
   forwardConfirmSeconds: 10,
   gotifyUrl: "https://gotify.example.com",
@@ -125,6 +127,14 @@ export async function updateConfig(
     if (!serviceLanguages.includes(v.serviceLanguage as ServiceLanguage))
       fail("Invalid service language");
     c.serviceLanguage = v.serviceLanguage as ServiceLanguage;
+  }
+  if ("incomingAnswerMode" in v) {
+    if (
+      v.incomingAnswerMode !== "confirmed" &&
+      v.incomingAnswerMode !== "waiting"
+    )
+      fail("Invalid incoming answer mode");
+    c.incomingAnswerMode = v.incomingAnswerMode;
   }
   if ("forwardConfirmEnabled" in v) {
     if (typeof v.forwardConfirmEnabled !== "boolean")

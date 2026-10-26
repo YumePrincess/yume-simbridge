@@ -1078,5 +1078,41 @@
     "fr": "Le destinataire doit appuyer sur 1 dans le délai choisi après le message dans la langue du service. L’appelant entend la musique d’attente ; la messagerie reste privée.",
     "ja": "転送先はサービス言語の案内終了後、設定した秒数以内に 1 を押す必要があります。発信者には保留音楽を流し、留守番電話の音声は中継しません。",
     "zh-Hant": "接聽者須在服務語言提示結束後設定秒數內按 1；等待期間來電者聽到等待音樂，語音信箱聲音不會轉播。"
+  },
+  "模块来电接听模式": {
+    "en": "SIM incoming answer mode",
+    "fr": "Mode de réponse aux appels SIM",
+    "ja": "SIM 着信の応答モード",
+    "zh-Hant": "模組來電接聽模式"
+  },
+  "目标方确认后接听（默认）": {
+    "en": "Answer after destination accepts (default)",
+    "fr": "Répondre après acceptation (par défaut)",
+    "ja": "転送先の確認後に応答（デフォルト）",
+    "zh-Hant": "目標方確認後接聽（預設）"
+  },
+  "先接听并播放提示和音乐": {
+    "en": "Answer first, then play prompts and music",
+    "fr": "Répondre puis diffuser les annonces et la musique",
+    "ja": "先に応答して案内と音楽を再生",
+    "zh-Hant": "先接聽並播放提示和音樂"
+  },
+  "模块先接听，播放中英文接通提示和等待音乐；失败时播放中英文提示。": {
+    "en": "The SIM answers first and plays Chinese/English prompts and hold music; failures use Chinese/English announcements.",
+    "fr": "La SIM répond puis diffuse des annonces en chinois et anglais et de la musique.",
+    "ja": "SIM が先に応答し、中国語・英語の案内と保留音楽を再生します。失敗時も中国語・英語で案内します。",
+    "zh-Hant": "模組先接聽，播放中英文接通提示和等待音樂；失敗時播放中英文提示。"
+  },
+  "模块保持振铃，目标方确认后才接听；等待时为运营商回铃音，不播放音乐或自定义失败提示，等待受运营商时限影响。": {
+    "en": "The SIM keeps ringing until the destination accepts. The caller hears carrier ringback; no music or custom failure announcements. Carrier ringing limits apply.",
+    "fr": "La SIM sonne jusqu’à acceptation. La tonalité et le délai dépendent de l’opérateur, sans musique ni annonce personnalisée.",
+    "ja": "確認まで SIM は呼び出し状態を維持します。通信会社の呼出音と時間制限が適用され、音楽や独自の失敗案内は再生されません。",
+    "zh-Hant": "模組保持振鈴，目標方確認後才接聽；等待時為電信業者回鈴音，不播放音樂或自訂失敗提示，等待受電信業者時限影響。"
+  },
+  "接听者须在服务语言提示结束后设定秒数内按 1；确认前不会转播目标方的声音。": {
+    "en": "Press 1 within the configured time after the service-language prompt. Destination audio stays isolated until acceptance.",
+    "fr": "Appuyez sur 1 dans le délai prévu après l’annonce. L’audio reste isolé jusqu’à acceptation.",
+    "ja": "サービス言語の案内後、設定時間内に 1 を押してください。確認前に転送先の音声は中継されません。",
+    "zh-Hant": "接聽者須在服務語言提示結束後設定秒數內按 1；確認前不會轉播目標方的聲音。"
   }
 }

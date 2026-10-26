@@ -13,6 +13,7 @@ type Screen = {
   service_language: ServiceLanguage;
   expires: number;
   finished: number;
+  require_confirm: number;
 };
 export async function screenForward(
   req: Request,
@@ -50,6 +51,16 @@ export async function screenForward(
       .bind(fields.CallSid, now(), parent, now(), fields.CallSid)
       .first();
     if (!bound) return hang();
+    // With confirmation disabled, the private answer webhook still provides
+    // authenticated proof that this exact destination leg answered.
+    if (!row.require_confirm) {
+      const accepted = await env.DB.prepare(
+        "UPDATE forward_screens SET state='accepted',updated=? WHERE parent_sid=? AND child_sid=? AND state='pending' AND finished=0 AND expires>? RETURNING parent_sid",
+      )
+        .bind(now(), parent, fields.CallSid, now())
+        .first();
+      return accepted ? response("") : hang();
+    }
     const action = `${env.PUBLIC_ORIGIN}/twilio/forward-confirm?parent=${encodeURIComponent(parent)}`;
     const language = row.service_language;
     const confirmationPrompt = `<Say voice="${speech[language].voice}" language="${speech[language].locale}">${xml(prompt(language, "forwardAccept"))}</Say>`;

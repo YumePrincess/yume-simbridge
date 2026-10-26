@@ -37,8 +37,8 @@ type Adapter struct {
 	lastResistLog time.Time
 	capMu         sync.RWMutex
 	caps          modem.Capabilities
-	events       chan modem.ModemEvent
-	close        sync.Once
+	events        chan modem.ModemEvent
+	close         sync.Once
 }
 
 func NewAdapter(client *Client) *Adapter {
@@ -197,6 +197,36 @@ func (a *Adapter) Answer(ctx context.Context, callID modem.CallID) error {
 	}
 	_, err := a.client.Exchange(ctx, "ATA")
 	return err
+}
+
+// IncomingRinging checks the actual cellular call list, including when a
+// NO CARRIER URC is missing. Never answer a disappeared or already active call.
+func (a *Adapter) IncomingRinging(ctx context.Context, callID modem.CallID) (bool, error) {
+	if err := a.validateActive(callID); err != nil {
+		return false, err
+	}
+	lines, err := a.client.Exchange(ctx, "AT+CLCC")
+	if err != nil {
+		return false, err
+	}
+	return clccIncomingRinging(lines), nil
+}
+func clccIncomingRinging(lines []string) bool {
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "+CLCC:") {
+			continue
+		}
+		fields := strings.Split(strings.TrimPrefix(line, "+CLCC:"), ",")
+		if len(fields) < 3 {
+			continue
+		}
+		dir, dErr := strconv.Atoi(strings.TrimSpace(fields[1]))
+		state, sErr := strconv.Atoi(strings.TrimSpace(fields[2]))
+		if dErr == nil && sErr == nil && dir == modem.CLCCDirIncoming && (state == 4 || state == 5) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Adapter) Hangup(ctx context.Context, callID modem.CallID) error {

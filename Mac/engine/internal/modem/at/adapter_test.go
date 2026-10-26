@@ -129,3 +129,19 @@ func TestClientDispatchesInterleavedCallURC(t *testing.T) {
 		t.Fatalf("interleaved URC = %#v", received)
 	}
 }
+
+func TestIncomingRingingRejectsEndedActiveOutgoingAndMalformedCalls(t *testing.T) {
+	for _, test := range []struct {
+		line string
+		want bool
+	}{
+		{"+CLCC: 1,1,4,0,0,\"02200000000\",129", true},
+		{"+CLCC: 1,1,5,0,0", true},
+		{"", false}, {"OK", false}, {"+CLCC: 1,1,0,0,0", false},
+		{"+CLCC: 1,0,3,0,0", false}, {"+CLCC: broken", false},
+	} {
+		if got := clccIncomingRinging([]string{test.line}); got != test.want {
+			t.Fatalf("%q ringing=%v", test.line, got)
+		}
+	}
+}

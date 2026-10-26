@@ -3,6 +3,7 @@ import { equal, fail, HttpError, readBytes } from "./util";
 import release from "../../version.json";
 import { claimSMS, enqueue, event, limit, now, online } from "./store";
 import { voice } from "./voice";
+import { cancelForward } from "./forward-cancel";
 import { totpAPI } from "./totp";
 import { receive } from "./email";
 import { listRecordings, recordingAPI, recordingTasks } from "./recordings";
@@ -159,14 +160,38 @@ async function edgeAPI(
     if (!c.inboundEnabled) fail("Inbound forwarding disabled", 409);
     await limit(env, "incoming", 30, 3600);
     const id = crypto.randomUUID();
-    await enqueue(env, id, "incoming", { from: String(v.from || "unknown") });
+    await enqueue(env, id, "incoming", {
+      from: String(v.from || "unknown"),
+      answerMode: c.incomingAnswerMode,
+    });
     await event(env, "call-" + id, "call.incoming", {
       from: String(v.from || "unknown"),
       via: env.TWILIO_NUMBER,
       to: c.forwardTo,
     });
     ctx.waitUntil(notify(env));
-    return json({ id });
+    return json({ id, answerMode: c.incomingAnswerMode });
+  }
+  if (path === "/edge/incoming-ready") {
+    if (typeof v.id !== "string") fail("Invalid ticket");
+    const row = await env.DB.prepare(
+      "SELECT s.state,s.finished,s.expires,s.child_sid FROM jobs j JOIN forward_screens s ON s.parent_sid=json_extract(j.payload,'$.callSid') WHERE j.id=? AND j.kind='incoming' AND j.status='running' AND json_extract(j.payload,'$.answerMode')='confirmed'",
+    )
+      .bind(v.id)
+      .first<{
+        state: string;
+        finished: number;
+        expires: number;
+        child_sid: string | null;
+      }>();
+    return json({
+      accepted:
+        !!row &&
+        row.state === "accepted" &&
+        !row.finished &&
+        row.expires > now() &&
+        !!row.child_sid,
+    });
   }
   if (path === "/edge/authorize") {
     if (typeof v.id !== "string") fail("Invalid ticket");
@@ -194,6 +219,8 @@ async function edgeAPI(
     )
       .bind(v.status, String(v.result || "").slice(0, 200), now(), v.id)
       .run();
+    if (v.status === "failed" || v.status === "ended")
+      await cancelForward(env, v.id);
     return json({ ok: true });
   }
   return json({ error: "Not found" }, 404);

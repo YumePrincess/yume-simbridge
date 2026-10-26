@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27012"
+var Build = "27013"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -440,59 +440,96 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 	defer cancel()
 	e.setCall(ev.CallID, cancel)
 	defer e.finishCall(ev.CallID)
-	// Answer the SIM once and play local waiting audio while the destination
-	// rings or performs private call screening. Its voicemail never reaches
-	// the SIM audio path, and carrier unanswered-call timers cannot cut it off.
-	if err := e.modem.Answer(ctx, ev.CallID); err != nil {
-		return
-	}
-	activeCtx, activeStop := context.WithTimeout(ctx, 15*time.Second)
-	active, activeErr := e.modem.WaitActiveDir(activeCtx, modem.CLCCDirIncoming)
-	activeStop()
-	if activeErr != nil || !active {
-		return
-	}
-	waitingCtx, stopWaiting := context.WithCancel(ctx)
-	waitingDone := make(chan struct{})
-	introDone := make(chan struct{})
-	go func() {
-		defer close(waitingDone)
-		if err := e.waitingAudio(waitingCtx, introDone); err != nil && !errors.Is(err, context.Canceled) {
-			cancel()
-		}
-	}()
-	var waitingOnce sync.Once
-	finishWaiting := func() { waitingOnce.Do(func() { stopWaiting(); <-waitingDone }) }
-	defer finishWaiting()
 	var ticket struct {
-		ID string `json:"id"`
+		ID         string `json:"id"`
+		AnswerMode string `json:"answerMode"`
 	}
 	if e.api(ctx, "/edge/incoming", map[string]string{"from": ev.Peer}, &ticket) != nil {
 		return
+	}
+	// Missing mode means an older Worker: preserve its original early-answer
+	// behavior. Updated Workers pin the chosen mode to this one-use ticket.
+	deferred := ticket.AnswerMode == "confirmed"
+	callFinished := false
+	defer func() {
+		if !callFinished {
+			e.callEvent(ticket.ID, "failed")
+		}
+	}()
+	stopRinging := func() {}
+	if deferred {
+		stopRinging = watchIncomingRinging(ctx, cancel, func(checkCtx context.Context) (bool, error) {
+			return e.modem.IncomingRinging(checkCtx, ev.CallID)
+		})
+		defer stopRinging()
+	}
+	finishWaiting := func() {}
+	if !deferred {
+		if err := e.answerIncoming(ctx, ev.CallID); err != nil {
+			return
+		}
+		waitingCtx, stopWaiting := context.WithCancel(ctx)
+		waitingDone := make(chan struct{})
+		introDone := make(chan struct{})
+		go func() {
+			defer close(waitingDone)
+			if err := e.waitingAudio(waitingCtx, introDone); err != nil && !errors.Is(err, context.Canceled) {
+				cancel()
+			}
+		}()
+		var waitingOnce sync.Once
+		finishWaiting = func() { waitingOnce.Do(func() { stopWaiting(); <-waitingDone }) }
+		defer finishWaiting()
+		select {
+		case <-ctx.Done():
+			return
+		case <-introDone:
+		}
 	}
 	c := e.getSIP()
 	var uri sip.Uri
 	if sip.ParseUri("sip:incoming@"+c.Domain, &uri) != nil {
 		return
 	}
-	select {
-	case <-ctx.Done():
-		return
-	case <-introDone:
-	}
 	dialCtx, stop := context.WithTimeout(ctx, 150*time.Second)
 	d, med, err := e.dg.Invite(dialCtx, uri, diago.InviteOptions{Username: c.User, Password: c.Password, Headers: []sip.Header{sip.NewHeader("X-Bridge", ticket.ID)}})
 	stop()
 	if err != nil {
-		e.callEvent(ticket.ID, "failed")
 		return
 	}
 	defer d.Close()
 	defer med.Close()
 	defer hangup(d)
+	stopRemoteWatch := context.AfterFunc(d.Context(), cancel)
+	defer stopRemoteWatch()
 	finishWaiting()
+	if deferred {
+		// Failed TwiML, voicemail or network answer must never cause ATA.
+		if err := answerAfterConfirmation(ctx, func(checkCtx context.Context) (bool, error) {
+			var result struct {
+				Accepted bool `json:"accepted"`
+			}
+			err := e.api(checkCtx, "/edge/incoming-ready", map[string]string{"id": ticket.ID}, &result)
+			return result.Accepted, err
+		}, func(answerCtx context.Context) error {
+			stopRinging()
+			ringCtx, endRingCheck := context.WithTimeout(answerCtx, 4*time.Second)
+			stillRinging, err := e.modem.IncomingRinging(ringCtx, ev.CallID)
+			endRingCheck()
+			if err != nil {
+				return err
+			}
+			if !stillRinging {
+				return errors.New("SIM caller is no longer ringing")
+			}
+			return e.answerIncoming(answerCtx, ev.CallID)
+		}); err != nil {
+			return
+		}
+	}
 	e.callEvent(ticket.ID, "connected")
 	_ = e.bridge(ctx, d.Context(), med, ev.CallID, nil)
+	callFinished = true
 	e.callEvent(ticket.ID, "ended")
 }
 func (e *engine) outgoing(d *diago.DialogServerSession) {
