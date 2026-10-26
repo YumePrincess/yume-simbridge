@@ -58,10 +58,23 @@ class ModuleADBSelectionTest(unittest.TestCase):
         claim.assert_not_called()
 
     def test_module_interface_conflict_is_actionable_and_does_not_run_adb_cli(self):
-        module=MagicMock()
+        module=MagicMock(idVendor=0x2ca3,idProduct=0x4006)
         module.get_active_configuration.return_value=[self.interface(5)]
-        with patch.object(runtime.usb.core,'find',side_effect=[[module],[]]), patch.object(runtime.usb.util,'claim_interface',side_effect=runtime.usb.core.USBError('busy')), patch.object(runtime.usb.util,'dispose_resources') as dispose:
-            with self.assertRaisesRegex(runtime.ADBError,'仅释放该模块'):runtime.ADBClient()
+        with patch.object(runtime.usb.core,'find',side_effect=[[module],[]]), patch.object(runtime.usb.util,'claim_interface',side_effect=runtime.usb.core.USBError('busy')), patch.object(runtime.usb.util,'dispose_resources') as dispose, patch.object(runtime,'ServerADB',side_effect=RuntimeError('unavailable')):
+            with self.assertRaisesRegex(runtime.ADBError,'其他设备无需断开'):runtime.ADBClient()
         dispose.assert_called_once_with(module)
+
+    def test_occupied_module_uses_only_the_verified_local_server(self):
+        module=MagicMock(idVendor=0x2ca3,idProduct=0x4006)
+        module.get_active_configuration.return_value=[self.interface(5)]
+        server=MagicMock()
+        server.shell_checked.return_value=('module',0)
+        with patch.object(runtime.usb.core,'find',side_effect=[[module],[]]), patch.object(runtime.usb.util,'claim_interface',side_effect=runtime.usb.core.USBError('busy')), patch.object(runtime.usb.util,'dispose_resources'), patch.object(runtime,'ServerADB',return_value=server) as create:
+            client=runtime.ADBClient()
+            self.assertEqual(client.shell_checked('uname -r'),('module',0))
+            client.push(b'fixture','/tmp/mavo-call/check',0o100600)
+            client.close()
+        create.assert_called_once_with(0x2ca3,0x4006)
+        server.close.assert_called_once()
 
 if __name__=='__main__':unittest.main()

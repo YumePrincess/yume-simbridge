@@ -17,6 +17,7 @@ import threading
 import time
 import urllib.request
 
+from adb_server import ServerADB
 import usb_backend
 import usb.core
 import usb.util
@@ -81,6 +82,7 @@ class ADBClient:
 
     def __init__(self):
         self.dev = None
+        self.server = None
         self.iface = None
         self.ep_in = None
         self.ep_out = None
@@ -125,14 +127,23 @@ class ADBClient:
         try:
             usb.util.claim_interface(dev, iface)
         except usb.core.USBError as e:
+            vendor,product=dev.idVendor,dev.idProduct
             usb.util.dispose_resources(dev)
-            raise ADBError(f'无法占用 DJI 模块 ADB 接口 {iface}，可能被其他 ADB 程序占用或无访问权限；请仅释放该模块的连接，其他设备无需断开') from e
+            try:
+                self.server=ServerADB(vendor,product)
+                print('Module ADB: sharing existing local server with verified USB identity',flush=True)
+                return
+            except Exception as error:
+                raise ADBError(f'无法连接 DJI 模块 ADB 接口 {iface}：USB 接口占用，且共享服务不可用（{error}）；其他设备无需断开') from e
         self.dev = dev
         self.iface = iface
         self.ep_in = ep_in
         self.ep_out = ep_out
 
     def close(self):
+        if self.server is not None:
+            self.server.close()
+            self.server = None
         try:
             if self.dev is not None:
                 try:
@@ -278,6 +289,9 @@ class ADBClient:
     def shell_checked(self, command, timeout=8.0):
         """执行 shell 命令，返回 (输出, 退出码)。"""
         with self._lock:
+            if self.server is not None:
+                try: return self.server.shell_checked(command,timeout)
+                except Exception as error: raise ADBError(str(error)) from error
             if self.dev is None:
                 raise ADBError('ADB 通道未打开')
             self._connect()
@@ -316,6 +330,9 @@ class ADBClient:
 
     def push(self, data, remote_path, mode, timeout=30.0):
         with self._lock:
+            if self.server is not None:
+                try: return self.server.push(data,remote_path,mode,timeout)
+                except Exception as error: raise ADBError(str(error)) from error
             if self.dev is None:
                 raise ADBError('ADB 通道未打开')
             if ',' in remote_path or '\x00' in remote_path:

@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27010"
+var Build = "27011"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -54,6 +54,7 @@ type syncReply struct {
 	OutboundEnabled bool      `json:"outboundEnabled"`
 }
 type engine struct {
+	rootCtx                             context.Context
 	boot                                bootstrap
 	modem                               *at.Adapter
 	database                            *db.DB
@@ -128,7 +129,7 @@ func main() {
 	if err != nil {
 		slog.Warn("modem probe failed", "error", err)
 	}
-	e := &engine{boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
+	e := &engine{rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
 	e.voiceReady.Store(*rx != "" && *tx != "")
 	ua, err := sipgo.NewUA(sipgo.WithUserAgent("simhub"))
 	if err != nil {
@@ -142,6 +143,7 @@ func main() {
 			cancel()
 		}
 	}()
+	go e.voiceRecoveryLoop(ctx)
 	go e.modemEvents(ctx)
 	go e.registerLoop(ctx)
 	go e.inboxLoop(ctx)
@@ -401,7 +403,11 @@ func (e *engine) resetRoute() {
 	if e.routeScript == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	parent := e.rootCtx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, e.python, "-s", "-B", e.routeScript)
 	cmd.Stdout = os.Stdout

@@ -42,7 +42,7 @@ cp Mac/runtime-cache/libusb-LICENSE.txt "$APP/Contents/Resources/"
 cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
-cp Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
+cp Mac/tools/adb_server.py Mac/tools/runtime_health.py Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
 if [ -d Mac/tools/voice-runtime ]; then cp -R Mac/tools/voice-runtime "$APP/Contents/Resources/Mac/tools/"; fi
 cp Mac/engine/LICENSE-CellBridge "$APP/Contents/Resources/"
 python3 - "$ROOT" "$APP" "$BUILD" <<'PY'

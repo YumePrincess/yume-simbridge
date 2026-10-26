@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"time"
 )
@@ -29,4 +31,28 @@ func audioHealthy(path string, now time.Time) bool {
 	}
 	age := now.UnixMilli() - h.Updated
 	return h.Ready && age >= 0 && age < 4000
+}
+
+// Route reset failure used to latch voiceReady=false forever. Recover only
+// while idle and with the real FIFOs present; startup without CoreAudio is
+// handled by the supervisor. Reuse the call reservation to avoid dial races.
+func (e *engine) tryRecoverVoice() {
+	if e.rxPath == "" || e.txPath == "" || e.voiceReady.Load() || !e.busy.CompareAndSwap(false, true) {
+		return
+	}
+	defer e.busy.Store(false)
+	slog.Info("retrying failed module voice route while idle")
+	e.resetRoute()
+}
+func (e *engine) voiceRecoveryLoop(ctx context.Context) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			e.tryRecoverVoice()
+		}
+	}
 }

@@ -100,6 +100,11 @@ if voice:
     audio=start([str(root/'bin/voice-audio-bridge'),'--fifo-rx',str(rx),'--fifo-tx',str(tx),'--health',str(data/'audio-health.json')])
     command+=['--rx',str(rx),'--tx',str(tx)]
 edge=start(command)
+from runtime_health import AudioWatchdog
+watchdog=AudioWatchdog()
+def health(name):
+    try:return json.loads((data/name).read_text())
+    except (OSError,ValueError):return {}
 try:
     while not stopping:
         if usb.core.find(idVendor=0x2CA3,idProduct=0x4006) is None:
@@ -107,6 +112,9 @@ try:
             break
         if any(p.poll() is not None for p in children):
             print('Runtime component stopped; restart required',flush=True)
+            break
+        if watchdog.check(health('edge-health.json'),health('audio-health.json'),voice,time.time(),time.monotonic()):
+            print('Audio health failed for 15 seconds while idle; restarting owned runtime',flush=True)
             break
         time.sleep(1)
 finally: stop()

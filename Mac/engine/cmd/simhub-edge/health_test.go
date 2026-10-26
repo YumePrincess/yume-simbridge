@@ -22,3 +22,28 @@ func TestAudioHealthRequiresFreshSuccessfulProbe(t *testing.T) {
 		}
 	}
 }
+
+func TestFailedRouteRecoversOnIdleRetryWithoutStartingAnotherCall(t *testing.T) {
+	e := &engine{rxPath: "rx", txPath: "tx", routeScript: "unused", python: "/usr/bin/false"}
+	e.tryRecoverVoice()
+	if e.voiceReady.Load() || e.busy.Load() {
+		t.Fatal("failed reset reported ready or kept line busy")
+	}
+	e.python = "/usr/bin/true"
+	e.tryRecoverVoice()
+	if !e.voiceReady.Load() || e.busy.Load() {
+		t.Fatal("idle retry did not restore actual route result")
+	}
+	e.voiceReady.Store(false)
+	e.busy.Store(true)
+	e.tryRecoverVoice()
+	if e.voiceReady.Load() || !e.busy.Load() {
+		t.Fatal("recovery interfered with active call")
+	}
+	e.busy.Store(false)
+	e.rxPath = ""
+	e.tryRecoverVoice()
+	if e.voiceReady.Load() {
+		t.Fatal("cannot declare ready without audio FIFO")
+	}
+}
