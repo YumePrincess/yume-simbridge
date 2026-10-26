@@ -8,6 +8,7 @@ export const serviceLanguages = [
 export type ServiceLanguage = (typeof serviceLanguages)[number];
 const en = {
   test: "SIM Hub notification test",
+  forwardAccept: "To accept this call, press one.",
   testBody: "The direct Gotify connection is working.",
   otp: "Enter the six-digit code from your authenticator, followed by pound.",
   otpRetry:
@@ -35,6 +36,7 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
   en,
   fr: {
     test: "Test de notification SIM Hub",
+    forwardAccept: "Pour accepter cet appel, appuyez sur un.",
     testBody: "La connexion directe à Gotify fonctionne.",
     otp: "Saisissez les six chiffres de votre application d’authentification, puis appuyez sur dièse.",
     otpRetry:
@@ -59,6 +61,7 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
   },
   ja: {
     test: "SIM Hub 通知テスト",
+    forwardAccept: "この電話に出るには、1を押してください。",
     testBody: "Gotify への直接接続が動作しています。",
     otp: "認証アプリの6桁のコードを入力し、シャープを押してください。",
     otpRetry:
@@ -83,6 +86,7 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
   },
   "zh-Hans": {
     test: "SIM Hub 推送测试",
+    forwardAccept: "如需接听此来电，请按一。",
     testBody: "Gotify 直连推送已正常工作。",
     otp: "请输入验证器中的六位一次性验证码，然后按井字键。",
     otpRetry: "验证码错误、已过期或已使用。请输入新的验证码，然后按井字键。",
@@ -105,6 +109,7 @@ export const messages: Record<ServiceLanguage, Record<Prompt, string>> = {
   },
   "zh-Hant": {
     test: "SIM Hub 推播測試",
+    forwardAccept: "如需接聽此來電，請按一。",
     testBody: "Gotify 直接連線推播已正常運作。",
     otp: "請輸入驗證器中的六位一次性驗證碼，然後按井字鍵。",
     otpRetry: "驗證碼錯誤、已過期或已使用。請輸入新的驗證碼，然後按井字鍵。",

@@ -1054,5 +1054,29 @@
     "fr": "Configurez d’abord l’authentification téléphonique",
     "ja": "先に電話の認証方式を設定してください",
     "zh-Hant": "請先設定電話驗證方式"
+  },
+  "转接接听后按 1 确认": {
+    "en": "Require press 1 to accept forwarded calls",
+    "fr": "Appuyer sur 1 pour accepter le transfert",
+    "ja": "転送先で 1 を押して応答を確認",
+    "zh-Hant": "轉接接聽後按 1 確認"
+  },
+  "确认等待时长（秒）": {
+    "en": "Confirmation wait (seconds)",
+    "fr": "Délai de confirmation (secondes)",
+    "ja": "確認の待ち時間（秒）",
+    "zh-Hant": "確認等待時長（秒）"
+  },
+  "关闭按键确认后，转接号码的语音信箱可能直接接通。": {
+    "en": "Disabling confirmation may connect callers directly to the destination voicemail.",
+    "fr": "Sans confirmation, l’appelant peut être connecté directement à la messagerie du destinataire.",
+    "ja": "確認を無効にすると、転送先の留守番電話につながる場合があります。",
+    "zh-Hant": "關閉按鍵確認後，轉接號碼的語音信箱可能直接接通。"
+  },
+  "接听者须在服务语言提示结束后设定秒数内按 1；等待期间来电者听到等待音乐，语音信箱声音不会转播。": {
+    "en": "The recipient must press 1 within the selected time after the service-language prompt. The caller hears hold music; voicemail audio stays private.",
+    "fr": "Le destinataire doit appuyer sur 1 dans le délai choisi après le message dans la langue du service. L’appelant entend la musique d’attente ; la messagerie reste privée.",
+    "ja": "転送先はサービス言語の案内終了後、設定した秒数以内に 1 を押す必要があります。発信者には保留音楽を流し、留守番電話の音声は中継しません。",
+    "zh-Hant": "接聽者須在服務語言提示結束後設定秒數內按 1；等待期間來電者聽到等待音樂，語音信箱聲音不會轉播。"
   }
 }

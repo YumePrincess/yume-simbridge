@@ -1,3 +1,8 @@
+import {
+  forwardUnavailable,
+  screenForward,
+  unconfirmedForward,
+} from "./forward-screen";
 import { consumeTOTP } from "./totp";
 import { prompt, speech, type Prompt } from "./languages";
 import { recordingCallback, recordingTasks } from "./recordings";
@@ -32,17 +37,22 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
   }
   const sid = fields.CallSid || "";
   if (!/^CA[a-f0-9]{32}$/.test(sid)) fail("Invalid call", 400);
+  if (path === "/twilio/forward-screen" || path === "/twilio/forward-confirm")
+    return screenForward(req, env, fields, path);
   if (path === "/twilio/done" || path === "/twilio/forward-done") {
-    // A completed leg includes normal hangup and answered voicemail. Never
-    // announce failure after an established conversation.
+    const notConfirmed =
+      path === "/twilio/forward-done" &&
+      (await unconfirmedForward(env, sid, fields.DialBridged));
+    // Network answer is not enough: a screened destination must confirm and bridge.
     if (
       ["busy", "no-answer", "failed", "canceled"].includes(
         fields.DialCallStatus || "",
-      )
+      ) ||
+      notConfirmed
     ) {
       const unavailable =
         path === "/twilio/forward-done"
-          ? '<Say voice="Polly.Zhiyu" language="cmn-CN">您拨打的电话暂时无法接通，请稍后重试。</Say><Say voice="Polly.Joanna" language="en-US">The number you have dialed is temporarily unavailable. Please try again later.</Say>'
+          ? forwardUnavailable
           : say("unavailable");
       return response(unavailable + "<Hangup/>");
     }
@@ -58,8 +68,24 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
       .bind(now(), sid, c.forwardTo, ticket, now() - 60000)
       .first();
     if (!job) return hang("expired");
+    let numberAttributes = "";
+    if (c.forwardConfirmEnabled) {
+      await env.DB.prepare(
+        "INSERT INTO forward_screens(parent_sid,target,wait_seconds,service_language,expires,updated) VALUES(?,?,?,?,?,?)",
+      )
+        .bind(
+          sid,
+          c.forwardTo,
+          c.forwardConfirmSeconds,
+          c.serviceLanguage,
+          now() + 120000,
+          now(),
+        )
+        .run();
+      numberAttributes = ` url="${xml(`${env.PUBLIC_ORIGIN}/twilio/forward-screen?parent=${encodeURIComponent(sid)}`)}" method="POST"`;
+    }
     return response(
-      `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" callerId="${xml(env.TWILIO_NUMBER)}" timeout="30" timeLimit="7200" action="/twilio/forward-done"><Number>${xml(c.forwardTo)}</Number></Dial><Hangup/>`,
+      `<Dial record="record-from-ringing-dual" recordingStatusCallback="https://worker.example.com/twilio/recording" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed" callerId="${xml(env.TWILIO_NUMBER)}" answerOnBridge="true" timeout="30" timeLimit="7200" action="/twilio/forward-done"><Number${numberAttributes}>${xml(c.forwardTo)}</Number></Dial><Hangup/>`,
     );
   }
   if (!c.outboundEnabled || !(c.authMode === "totp" ? c.totpSecret : c.pinHash))

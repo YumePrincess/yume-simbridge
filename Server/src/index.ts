@@ -247,6 +247,9 @@ export default {
   async scheduled(_controller, env, _ctx) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM sessions WHERE expires<?").bind(now()),
+      env.DB.prepare("DELETE FROM forward_screens WHERE updated<?").bind(
+        now() - 10800000,
+      ),
       env.DB.prepare("DELETE FROM totp_enrollment WHERE expires<?").bind(now()),
       env.DB.prepare("DELETE FROM limits WHERE expires<?").bind(now()),
       env.DB.prepare(

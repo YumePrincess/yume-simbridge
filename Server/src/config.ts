@@ -7,6 +7,8 @@ export type Config = {
   totpSecret: string;
   serviceLanguage: ServiceLanguage;
   forwardTo: string;
+  forwardConfirmEnabled: boolean;
+  forwardConfirmSeconds: number;
   gotifyUrl: string;
   gotifyToken: string;
   allowedSenders: string[];
@@ -25,6 +27,8 @@ export const defaults: Config = {
   totpSecret: "",
   serviceLanguage: "en",
   forwardTo: "+12025550123",
+  forwardConfirmEnabled: true,
+  forwardConfirmSeconds: 10,
   gotifyUrl: "https://gotify.example.com",
   gotifyToken: "",
   allowedSenders: ["sender@example.com"],
@@ -121,6 +125,20 @@ export async function updateConfig(
     if (!serviceLanguages.includes(v.serviceLanguage as ServiceLanguage))
       fail("Invalid service language");
     c.serviceLanguage = v.serviceLanguage as ServiceLanguage;
+  }
+  if ("forwardConfirmEnabled" in v) {
+    if (typeof v.forwardConfirmEnabled !== "boolean")
+      fail("Invalid forwarding confirmation setting");
+    c.forwardConfirmEnabled = v.forwardConfirmEnabled;
+  }
+  if ("forwardConfirmSeconds" in v) {
+    if (
+      !Number.isInteger(v.forwardConfirmSeconds) ||
+      Number(v.forwardConfirmSeconds) < 1 ||
+      Number(v.forwardConfirmSeconds) > 60
+    )
+      fail("Confirmation wait must be between 1 and 60 seconds");
+    c.forwardConfirmSeconds = Number(v.forwardConfirmSeconds);
   }
   if ("forwardTo" in v) c.forwardTo = number(v.forwardTo);
   if (typeof v.gotifyUrl === "string") {

@@ -10,6 +10,8 @@ struct Settings: Codable {
   var authMode: String? = "password"
   var totpConfigured: Bool? = false
   var forwardTo = "+12025550123"
+  var forwardConfirmEnabled: Bool? = true
+  var forwardConfirmSeconds: Int? = 10
   var gotifyUrl = "https://gotify.example.com"
   var allowedSenders = ["sender@example.com"]
   var sipDomain = "yume-simhub.sip.twilio.com"
@@ -652,6 +654,21 @@ struct Content: View {
               .secondary)
             TextField(L("SIM 来电转接号码"), text: $model.settings.forwardTo)
             Toggle(L("启用 SIM 来电 → Twilio → 目标号码"), isOn: $model.settings.inboundEnabled)
+            Toggle(L("转接接听后按 1 确认"), isOn: Binding(
+              get: { model.settings.forwardConfirmEnabled ?? true },
+              set: { model.settings.forwardConfirmEnabled = $0 }))
+            if model.settings.forwardConfirmEnabled ?? true {
+              Stepper(value: Binding(
+                get: { model.settings.forwardConfirmSeconds ?? 10 },
+                set: { model.settings.forwardConfirmSeconds = $0 }), in: 1...60) {
+                HStack { Text(L("确认等待时长（秒）")); Spacer(); Text("\(model.settings.forwardConfirmSeconds ?? 10)").monospacedDigit() }
+              }
+              Text(L("接听者须在服务语言提示结束后设定秒数内按 1；等待期间来电者听到等待音乐，语音信箱声音不会转播。"))
+                .font(.caption).foregroundStyle(.secondary)
+            } else {
+              Text(L("关闭按键确认后，转接号码的语音信箱可能直接接通。"))
+                .font(.caption).foregroundStyle(.secondary)
+            }
             Picker(L("电话验证模式"), selection: Binding(
               get: { model.settings.authMode ?? "password" },
               set: { model.selectAuthMode($0) })) {

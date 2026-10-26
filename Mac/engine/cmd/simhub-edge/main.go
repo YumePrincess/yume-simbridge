@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27011"
+var Build = "27012"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -440,6 +440,30 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 	defer cancel()
 	e.setCall(ev.CallID, cancel)
 	defer e.finishCall(ev.CallID)
+	// Answer the SIM once and play local waiting audio while the destination
+	// rings or performs private call screening. Its voicemail never reaches
+	// the SIM audio path, and carrier unanswered-call timers cannot cut it off.
+	if err := e.modem.Answer(ctx, ev.CallID); err != nil {
+		return
+	}
+	activeCtx, activeStop := context.WithTimeout(ctx, 15*time.Second)
+	active, activeErr := e.modem.WaitActiveDir(activeCtx, modem.CLCCDirIncoming)
+	activeStop()
+	if activeErr != nil || !active {
+		return
+	}
+	waitingCtx, stopWaiting := context.WithCancel(ctx)
+	waitingDone := make(chan struct{})
+	introDone := make(chan struct{})
+	go func() {
+		defer close(waitingDone)
+		if err := e.waitingAudio(waitingCtx, introDone); err != nil && !errors.Is(err, context.Canceled) {
+			cancel()
+		}
+	}()
+	var waitingOnce sync.Once
+	finishWaiting := func() { waitingOnce.Do(func() { stopWaiting(); <-waitingDone }) }
+	defer finishWaiting()
 	var ticket struct {
 		ID string `json:"id"`
 	}
@@ -451,7 +475,12 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 	if sip.ParseUri("sip:incoming@"+c.Domain, &uri) != nil {
 		return
 	}
-	dialCtx, stop := context.WithTimeout(ctx, 40*time.Second)
+	select {
+	case <-ctx.Done():
+		return
+	case <-introDone:
+	}
+	dialCtx, stop := context.WithTimeout(ctx, 150*time.Second)
 	d, med, err := e.dg.Invite(dialCtx, uri, diago.InviteOptions{Username: c.User, Password: c.Password, Headers: []sip.Header{sip.NewHeader("X-Bridge", ticket.ID)}})
 	stop()
 	if err != nil {
@@ -461,15 +490,7 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 	defer d.Close()
 	defer med.Close()
 	defer hangup(d)
-	if err = e.modem.Answer(ctx, ev.CallID); err != nil {
-		return
-	}
-	activeCtx, stop := context.WithTimeout(ctx, 15*time.Second)
-	ok, err := e.modem.WaitActiveDir(activeCtx, modem.CLCCDirIncoming)
-	stop()
-	if err != nil || !ok {
-		return
-	}
+	finishWaiting()
 	e.callEvent(ticket.ID, "connected")
 	_ = e.bridge(ctx, d.Context(), med, ev.CallID, nil)
 	e.callEvent(ticket.ID, "ended")

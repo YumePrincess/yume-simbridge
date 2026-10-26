@@ -1,0 +1,12 @@
+{
+  "format": "signed 16-bit little-endian PCM, 8000 Hz, mono",
+  "sourceFile": "bgm.mp3",
+  "sourceSHA256": "f0778e8e3a6a2a274c0dadf39671323cf89c9304307947a0fda928d47bafc25f",
+  "introSeconds": 6.240125,
+  "musicSeconds": 188.290625,
+  "musicPeak": 10000,
+  "speech": [
+    "电话正在接通中，请稍后。",
+    "Your call is being connected. Please wait."
+  ]
+}

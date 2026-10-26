@@ -20,6 +20,7 @@ class DB {
     this.db.exec(readFileSync("migrations/0002_recordings.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0003_notifications.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0004_totp.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0005_forward_screen.sql", "utf8"));
   }
   prepare(sql: string) {
     const stmt = this.db.prepare(sql);
@@ -227,7 +228,9 @@ describe("control and call authorization", () => {
       })
     ).text();
     expect(xml).toContain('callerId="+12025550124"');
-    expect(xml).toContain("<Number>+12025550123</Number>");
+    expect(xml).toContain("+12025550123</Number>");
+    expect(xml).toContain('answerOnBridge="true"');
+    expect(xml).toContain("/twilio/forward-screen?parent=");
     expect(xml).toContain('action="/twilio/forward-done"');
   });
 });
@@ -632,7 +635,7 @@ describe("dial result announcements", () => {
         await webhook("/twilio/forward-done", { DialCallStatus: status })
       ).text();
       expect(body).toContain('language="cmn-CN"');
-      expect(body).toContain("您拨打的电话暂时无法接通，请稍后重试。");
+      expect(body).toContain("您拨打的用户暂时无法接通，请稍后重试。");
       expect(body).toContain('language="en-US"');
       expect(body).toContain("Please try again later.");
       expect(body.indexOf("cmn-CN")).toBeLessThan(body.indexOf("en-US"));
@@ -860,4 +863,191 @@ describe("authenticator enrollment, verification and reset", () => {
       400,
     );
   });
+});
+
+describe("private press-one forwarding screen", () => {
+  const child = "CA" + "c".repeat(32);
+  async function startScreen(seconds = 10) {
+    await saveConfig(env, {
+      ...(await (await import("../src/config")).config(env)),
+      forwardConfirmSeconds: seconds,
+    });
+    const incoming = (await (
+      await edge("/edge/incoming", { from: "02200000000" })
+    ).json()) as { id: string };
+    const body = await (
+      await webhook("/twilio/cellular", {
+        From: "sip:incoming@test.sip.twilio.com",
+        "SipHeader_X-Bridge": incoming.id,
+      })
+    ).text();
+    expect(body).toContain('answerOnBridge="true"');
+    expect(body).toContain("/twilio/forward-screen?parent=");
+    return { CallSid: child, ParentCallSid: sid, To: "+12025550123" };
+  }
+  const screenPath = "/twilio/forward-screen?parent=" + sid;
+  const confirmPath = "/twilio/forward-confirm?parent=" + sid;
+  it("privately prompts the called leg and passes the configured wait to Gather", async () => {
+    const f = await startScreen(37);
+    const body = await (await webhook(screenPath, f)).text();
+    expect(body).toContain('input="dtmf"');
+    expect(body).toContain('numDigits="1"');
+    expect(body).toContain('timeout="37"');
+    expect(body).toContain('actionOnEmptyResult="true"');
+    expect(body).not.toContain('language="cmn-CN"');
+    expect(body).toContain('language="en-US"');
+    expect(body).toContain("press one");
+    expect(body).toContain("<Hangup/>");
+  });
+  it("releases the private screen only for a confirmed child and tolerates retry", async () => {
+    const f = await startScreen();
+    await webhook(screenPath, f);
+    for (let retry = 0; retry < 2; retry++) {
+      const body = await (
+        await webhook(confirmPath, { ...f, Digits: "1" })
+      ).text();
+      expect(body).not.toContain("<Hangup");
+      expect(body).not.toContain("<Gather");
+    }
+    const done = await (
+      await webhook("/twilio/forward-done", {
+        DialCallStatus: "completed",
+        DialBridged: "true",
+        DialCallSid: child,
+      })
+    ).text();
+    expect(done).not.toContain("<Say");
+    expect(
+      await (await webhook(confirmPath, { ...f, Digits: "1" })).text(),
+    ).toContain("<Hangup/>");
+  });
+  it.each(["", "0", "2", "11", "#"])(
+    "hangs up voicemail/no input/wrong input without bridging: %s",
+    async (digits) => {
+      const f = await startScreen();
+      await webhook(screenPath, f);
+      expect(
+        await (await webhook(confirmPath, { ...f, Digits: digits })).text(),
+      ).toContain("<Hangup/>");
+      const done = await (
+        await webhook("/twilio/forward-done", {
+          DialCallStatus: "completed",
+          DialBridged: "false",
+        })
+      ).text();
+      expect(done).toContain("您拨打的用户暂时无法接通");
+      expect(done).toContain("temporarily unavailable");
+      expect(
+        await (await webhook(confirmPath, { ...f, Digits: "1" })).text(),
+      ).toContain("<Hangup/>");
+    },
+  );
+  it("does not let a different parent, destination or child confirm a call", async () => {
+    const f = await startScreen();
+    await webhook(screenPath, f);
+    for (const changed of [
+      { ParentCallSid: child },
+      { CallSid: "CA" + "d".repeat(32) },
+      { To: "+12025550000" },
+    ]) {
+      expect(
+        await (
+          await webhook(confirmPath, { ...f, ...changed, Digits: "1" })
+        ).text(),
+      ).toContain("<Hangup/>");
+    }
+    expect(
+      await (await webhook(confirmPath, { ...f, Digits: "1" })).text(),
+    ).not.toContain("<Hangup");
+  });
+  it("does not confuse network answer or a lost confirmation with a bridged call", async () => {
+    await startScreen();
+    const done = await (
+      await webhook("/twilio/forward-done", {
+        DialCallStatus: "completed",
+        DialBridged: "true",
+      })
+    ).text();
+    expect(done).toContain("您拨打的用户暂时无法接通");
+  });
+  it("requires an explicit switch for direct forwarding and validates the time range", async () => {
+    for (const seconds of [0, 61, 1.2, "10", null])
+      expect(
+        (
+          await edge(
+            "/edge/settings",
+            { forwardConfirmSeconds: seconds },
+            "PUT",
+          )
+        ).status,
+      ).toBe(400);
+    for (const seconds of [1, 60])
+      expect(
+        (
+          await edge(
+            "/edge/settings",
+            { forwardConfirmSeconds: seconds },
+            "PUT",
+          )
+        ).status,
+      ).toBe(200);
+    expect(
+      (await edge("/edge/settings", { forwardConfirmEnabled: false }, "PUT"))
+        .status,
+    ).toBe(200);
+    const incoming = (await (
+      await edge("/edge/incoming", { from: "02200000000" })
+    ).json()) as { id: string };
+    const body = await (
+      await webhook("/twilio/cellular", {
+        From: "sip:incoming@test.sip.twilio.com",
+        "SipHeader_X-Bridge": incoming.id,
+      })
+    ).text();
+    expect(body).not.toContain("/forward-screen");
+    expect(body).toContain("<Number>+12025550123</Number>");
+  });
+  it("expires abandoned screens and rejects unbound confirmations", async () => {
+    const f = await startScreen();
+    expect(
+      await (await webhook(confirmPath, { ...f, Digits: "1" })).text(),
+    ).toContain("<Hangup/>");
+    await db.prepare("UPDATE forward_screens SET expires=0").run();
+    expect(await (await webhook(screenPath, f)).text()).toContain("<Hangup/>");
+  });
+});
+
+describe("forward confirmation language", () => {
+  it.each(["en", "fr", "ja", "zh-Hans", "zh-Hant"] as const)(
+    "uses the saved service language and pins it to the incoming call: %s",
+    async (language) => {
+      const { config } = await import("../src/config");
+      const { speech, prompt } = await import("../src/languages");
+      await saveConfig(env, {
+        ...(await config(env)),
+        serviceLanguage: language,
+      });
+      const incoming = (await (
+        await edge("/edge/incoming", { from: "02200000000" })
+      ).json()) as { id: string };
+      await webhook("/twilio/cellular", {
+        From: "sip:incoming@test.sip.twilio.com",
+        "SipHeader_X-Bridge": incoming.id,
+      });
+      await saveConfig(env, {
+        ...(await config(env)),
+        serviceLanguage: language === "en" ? "ja" : "en",
+      });
+      const body = await (
+        await webhook("/twilio/forward-screen?parent=" + sid, {
+          CallSid: "CA" + "c".repeat(32),
+          ParentCallSid: sid,
+          To: "+12025550123",
+        })
+      ).text();
+      expect(body).toContain(`language="${speech[language].locale}"`);
+      expect(body).toContain(prompt(language, "forwardAccept"));
+      expect(body.match(/<Say /g)).toHaveLength(1);
+    },
+  );
 });
