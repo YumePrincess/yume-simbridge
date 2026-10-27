@@ -39,7 +39,7 @@ shutil.copytree(root/'Mac/runtime-cache/python',app/'Contents/Resources/Python',
 PYRUNTIME
 cp Mac/runtime-cache/libusb-1.0.0.dylib "$APP/Contents/Resources/Mac/bin/"
 cp Mac/runtime-cache/libusb-LICENSE.txt "$APP/Contents/Resources/"
-cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon-$BUILD.icns"
 cp MacApp/SimHubLogo.png "$APP/Contents/Resources/SimHubLogo.png"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
@@ -65,7 +65,7 @@ for language in ['en','fr','ja','zh-Hans','zh-Hant']:
     purpose={'en':'Reads DJI USB call audio to bridge phone calls.','fr':'Lit le son USB du module DJI pour relayer les appels.','ja':'DJI モジュールの USB 通話音声を読み取り、電話回線へ中継します。','zh-Hans':'读取 DJI 模块的 USB 通话音频，并桥接到电话网络。','zh-Hant':'讀取 DJI 模組的 USB 通話音訊，並橋接至電話網路。'}[language]
     (directory/'InfoPlist.strings').write_text('"NSMicrophoneUsageDescription" = '+json.dumps(purpose,ensure_ascii=False)+';\n')
 
-with (app/'Contents/Info.plist').open('wb') as f:plistlib.dump({'CFBundleExecutable':'YumeSimHub','CFBundleIdentifier':'zone.yume.simhub','CFBundleName':'Yume SIM Hub','CFBundleIconFile':'AppIcon','CFBundleDisplayName':'Yume SIM Hub','CFBundlePackageType':'APPL','CFBundleShortVersionString':version['version'],'CFBundleVersion':str(effective_build),'LSMinimumSystemVersion':'26.0','LSArchitecturePriority':['arm64'],'LSRequiresNativeExecution':True,'CFBundleDevelopmentRegion':'en','CFBundleLocalizations':['en','fr','ja','zh-Hans','zh-Hant'],'NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'用于读取 DJI 模块的 USB 通话音频，并桥接到电话网络。'},f)
+with (app/'Contents/Info.plist').open('wb') as f:plistlib.dump({'CFBundleExecutable':'YumeSimHub','CFBundleIdentifier':'zone.yume.simhub','CFBundleName':'Yume SIM Hub','CFBundleIconFile':f'AppIcon-{effective_build}','CFBundleDisplayName':'Yume SIM Hub','CFBundlePackageType':'APPL','CFBundleShortVersionString':version['version'],'CFBundleVersion':str(effective_build),'LSMinimumSystemVersion':'26.0','LSArchitecturePriority':['arm64'],'LSRequiresNativeExecution':True,'CFBundleDevelopmentRegion':'en','CFBundleLocalizations':['en','fr','ja','zh-Hans','zh-Hant'],'NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'用于读取 DJI 模块的 USB 通话音频，并桥接到电话网络。'},f)
 PY
 python3 scripts/sign-mac.py "$APP"
 if [ "${1:-}" = "--install" ]; then

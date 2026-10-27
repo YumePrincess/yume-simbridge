@@ -195,7 +195,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27017")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27020")"
   }
   @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
   func openReleasePage() {
@@ -741,7 +741,7 @@ struct ClientPreferences: View {
   var body: some View {
     Form {
       Section(L("客户端设置")) {
-        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions(includesSystem: true) }
+        ClientLanguagePicker(model: model)
         Text(L("客户端语言同步到 macOS 菜单栏，也可在系统设置中选择应用语言。")).font(.caption).foregroundStyle(.secondary)
         AppearancePicker(model: model)
         Button(L("关于 Yume SIM Hub")) { model.showAbout = true }

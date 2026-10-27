@@ -25,7 +25,7 @@ struct HubLogo: View {
   var size: CGFloat = 84
   var body: some View {
     if let url = Bundle.main.url(forResource: "SimHubLogo", withExtension: "png"), let image = NSImage(contentsOf: url) {
-      Image(nsImage: image).resizable().scaledToFit().frame(width: size, height: size).accessibilityHidden(true)
+      Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit().frame(width: size, height: size).accessibilityHidden(true)
     }
   }
 }
@@ -37,7 +37,19 @@ struct AppearancePicker: View {
       Text(L("跟随系统")).tag("system")
       Text(L("浅色")).tag("light")
       Text(L("深色")).tag("dark")
+    }.pickerStyle(.menu)
+  }
+}
+
+struct ClientLanguagePicker: View {
+  @ObservedObject var model: Model
+  var body: some View {
+    Picker(L("客户端语言"), selection: $model.language) {
+      LanguageOptions(includesSystem: true)
     }
+    .id(ClientLanguage.current())
+    .pickerStyle(.menu)
+    .fixedSize(horizontal: false, vertical: true)
   }
 }
 
@@ -48,7 +60,7 @@ struct AboutView: View {
   private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—" }
   var body: some View {
     VStack(spacing: 24) {
-      HubLogo(size: 100)
+      HubLogo(size: 160)
       VStack(spacing: 8) {
         Text("Yume SIM Hub").font(.system(size: 26, weight: .bold, design: .rounded))
         Text(L("Mac 蜂窝通信中枢")).font(.callout).foregroundStyle(.secondary)

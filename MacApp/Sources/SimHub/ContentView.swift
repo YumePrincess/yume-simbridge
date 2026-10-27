@@ -51,7 +51,7 @@ struct Content: View {
   var body: some View {
     NavigationSplitView {
       sidebar
-        .navigationSplitViewColumnWidth(min: 200, ideal: 222, max: 270)
+        .navigationSplitViewColumnWidth(min: 230, ideal: 244, max: 280)
     } detail: {
       VStack(spacing: 0) {
         if !usefulNotice.isEmpty { noticeBanner }
@@ -84,13 +84,13 @@ struct Content: View {
   private var sidebar: some View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
-        HubLogo(size: 36)
+        HubLogo(size: 48)
         VStack(alignment: .leading, spacing: 2) {
           Text("Yume SIM Hub").font(.headline)
           Text(L("Mac 蜂窝通信中枢")).font(.caption).foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
-      }.padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 16)
+      }.padding(.horizontal, 16).padding(.top, 18).padding(.bottom, 16)
       List(selection: Binding<Int?>(get: { model.selectedTab }, set: { if let value = $0 { model.selectedTab = value } })) {
         Section(L("通信")) {
           ForEach(communication) { item in destinationRow(item) }
@@ -104,7 +104,6 @@ struct Content: View {
           Circle().fill(ready ? .green : (model.running ? .orange : .secondary)).frame(width: 7, height: 7)
           Text(L(serviceTitle)).font(.callout.weight(.medium))
         }
-        Text("worker.example.com").font(.caption2).foregroundStyle(.tertiary)
       }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
     }
   }
@@ -168,7 +167,6 @@ struct Content: View {
             Text(L("模块、通话与消息，一处管理。")).foregroundStyle(.secondary)
           }
           Spacer(minLength: 0)
-          HubLogo(size: 72)
         }.padding(.top, 8)
         EqualHeightRow(spacing: 12) {
           healthTile("模块", value: model.edge.online == true ? "在线" : "离线", symbol: "simcard", good: model.edge.online == true)
@@ -349,7 +347,7 @@ struct Content: View {
     Form {
       Section { pageIntro("应用设置", subtitle: "语言、更新与本机诊断。", symbol: "gearshape") }
       Section(L("客户端设置")) {
-        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions(includesSystem: true) }
+        ClientLanguagePicker(model: model)
         help("跟随系统使用首选语言；不支持的系统语言使用英语。客户端语言同步到 macOS 菜单栏。")
         AppearancePicker(model: model)
         Toggle(L("登录 Mac 后启动"), isOn: Binding(get: { model.loginItem }, set: { model.setLoginItem($0) }))
@@ -564,7 +562,7 @@ struct SetupAssistantView: View {
         }
         Spacer()
       }
-      Picker(L("客户端语言"), selection: $model.language) { LanguageOptions(includesSystem: true) }
+      ClientLanguagePicker(model: model)
       Text(L("运行环境已包含在 App 内，无需安装开发工具。配置与运行数据仅保存在本机 Application Support。"))
         .font(.callout).foregroundStyle(.secondary)
       VStack(spacing: 0) {
