@@ -855,6 +855,7 @@ struct Content: View {
               }
             }.padding(.vertical, 8)
           }
+          .buttonStyle(.borderless)
           HStack {
             Text(L("录音从振铃到挂断 · 双声道 · R2 simhub/ 加密归档")).font(.caption).foregroundStyle(.secondary)
             Spacer()
@@ -989,7 +990,7 @@ struct Content: View {
             Text(L(inbox ? (r.notified == 1 ? L("已推送") : L("待推送")) : (r.status ?? ""))).font(
               .caption)
           }
-          Button(L("删除"), role: .destructive) { Task { await model.removeHistory(inbox: inbox, id: r.id) } }
+          Button(L("删除"), role: .destructive) { Task { await model.removeHistory(inbox: inbox, id: r.id) } }.buttonStyle(.borderless)
           Text(recordRoute(r, inbox: inbox)).font(.caption).foregroundStyle(.secondary)
             .textSelection(.enabled)
           if let body = r.data["body"] { Text(body).textSelection(.enabled) }
