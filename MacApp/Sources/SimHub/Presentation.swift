@@ -60,7 +60,7 @@ struct AboutView: View {
   private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—" }
   var body: some View {
     VStack(spacing: 24) {
-      HubLogo(size: 160)
+      HubLogo(size: 84)
       VStack(spacing: 8) {
         Text("Yume SIM Hub").font(.system(size: 26, weight: .bold, design: .rounded))
         Text(L("Mac 蜂窝通信中枢")).font(.callout).foregroundStyle(.secondary)
