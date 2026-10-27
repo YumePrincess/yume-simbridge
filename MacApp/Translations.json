@@ -1198,5 +1198,305 @@
     "fr": "Effacer le journal local",
     "ja": "ローカルログを消去",
     "zh-Hant": "清空本機日誌"
+  },
+  "概览": {
+    "en": "Overview",
+    "fr": "Vue d’ensemble",
+    "ja": "概要",
+    "zh-Hant": "概覽"
+  },
+  "Mac 蜂窝通信中枢": {
+    "en": "Mac cellular gateway",
+    "fr": "Passerelle mobile Mac",
+    "ja": "Mac モバイル通信ゲートウェイ",
+    "zh-Hant": "Mac 行動通訊中樞"
+  },
+  "通信": {
+    "en": "Communication",
+    "fr": "Communication",
+    "ja": "通信",
+    "zh-Hant": "通訊"
+  },
+  "管理": {
+    "en": "Manage",
+    "fr": "Gestion",
+    "ja": "管理",
+    "zh-Hant": "管理"
+  },
+  "服务已停止": {
+    "en": "Service stopped",
+    "fr": "Service arrêté",
+    "ja": "サービス停止中",
+    "zh-Hant": "服務已停止"
+  },
+  "通信已就绪": {
+    "en": "Ready to connect",
+    "fr": "Prêt à communiquer",
+    "ja": "通信の準備完了",
+    "zh-Hant": "通訊已就緒"
+  },
+  "正在连接设备": {
+    "en": "Connecting devices",
+    "fr": "Connexion aux appareils",
+    "ja": "デバイスに接続中",
+    "zh-Hant": "正在連接裝置"
+  },
+  "模块、通话与消息，一处管理。": {
+    "en": "Your SIM, calls and messages in one place.",
+    "fr": "Votre SIM, vos appels et vos messages au même endroit.",
+    "ja": "SIM、通話、メッセージをまとめて管理。",
+    "zh-Hant": "模組、通話與訊息，一處管理。"
+  },
+  "消息自动化": {
+    "en": "Message automation",
+    "fr": "Automatisation des messages",
+    "ja": "メッセージ自動化",
+    "zh-Hant": "訊息自動化"
+  },
+  "已配置": {
+    "en": "Configured",
+    "fr": "Configuré",
+    "ja": "設定済み",
+    "zh-Hant": "已設定"
+  },
+  "未配置": {
+    "en": "Not configured",
+    "fr": "Non configuré",
+    "ja": "未設定",
+    "zh-Hant": "未設定"
+  },
+  "已启用": {
+    "en": "Enabled",
+    "fr": "Activé",
+    "ja": "有効",
+    "zh-Hant": "已啟用"
+  },
+  "已停用": {
+    "en": "Disabled",
+    "fr": "Désactivé",
+    "ja": "無効",
+    "zh-Hant": "已停用"
+  },
+  "管理消息自动化": {
+    "en": "Manage automation",
+    "fr": "Gérer l’automatisation",
+    "ja": "自動化を管理",
+    "zh-Hant": "管理訊息自動化"
+  },
+  "当前模块": {
+    "en": "Current module",
+    "fr": "Module actuel",
+    "ja": "現在のモジュール",
+    "zh-Hant": "目前模組"
+  },
+  "设备与音频绑定至同一 USB 端口。": {
+    "en": "Device and audio use the same USB port.",
+    "fr": "L’appareil et l’audio utilisent le même port USB.",
+    "ja": "デバイスと音声は同じ USB ポートを使用します。",
+    "zh-Hant": "裝置與音訊綁定至同一 USB 連接埠。"
+  },
+  "管理模块与接入": {
+    "en": "Manage device and access",
+    "fr": "Gérer le module et l’accès",
+    "ja": "モジュールと接続を管理",
+    "zh-Hant": "管理模組與接入"
+  },
+  "模块与接入": {
+    "en": "Module & access",
+    "fr": "Module et accès",
+    "ja": "モジュールと接続",
+    "zh-Hant": "模組與接入"
+  },
+  "最近活动": {
+    "en": "Recent activity",
+    "fr": "Activité récente",
+    "ja": "最近の履歴",
+    "zh-Hant": "最近活動"
+  },
+  "新的通话和短信会显示在这里。": {
+    "en": "New calls and messages will appear here.",
+    "fr": "Les nouveaux appels et messages s’afficheront ici.",
+    "ja": "新しい通話や SMS がここに表示されます。",
+    "zh-Hant": "新的通話和簡訊會顯示在這裡。"
+  },
+  "查看全部活动": {
+    "en": "View all activity",
+    "fr": "Voir toute l’activité",
+    "ja": "すべての履歴を表示",
+    "zh-Hant": "查看全部活動"
+  },
+  "SIM 来电": {
+    "en": "SIM incoming",
+    "fr": "Appels entrants SIM",
+    "ja": "SIM 着信",
+    "zh-Hant": "SIM 來電"
+  },
+  "Twilio 来电": {
+    "en": "Twilio incoming",
+    "fr": "Appels entrants Twilio",
+    "ja": "Twilio 着信",
+    "zh-Hant": "Twilio 來電"
+  },
+  "身份验证后使用 SIM 外呼": {
+    "en": "SIM calling after authentication",
+    "fr": "Appels SIM après authentification",
+    "ja": "認証後に SIM から発信",
+    "zh-Hant": "身分驗證後使用 SIM 外呼"
+  },
+  "管理电话路由": {
+    "en": "Manage call routing",
+    "fr": "Gérer le routage",
+    "ja": "通話ルーティングを管理",
+    "zh-Hant": "管理電話路由"
+  },
+  "分别管理 SIM 来电转接与 Twilio 验证外呼。": {
+    "en": "Manage SIM forwarding and authenticated Twilio calls separately.",
+    "fr": "Gérez le transfert SIM et les appels Twilio authentifiés.",
+    "ja": "SIM 着信転送と Twilio 認証発信を個別に管理します。",
+    "zh-Hant": "分別管理 SIM 來電轉接與 Twilio 驗證外呼。"
+  },
+  "服务提示语言": {
+    "en": "Service language",
+    "fr": "Langue du service",
+    "ja": "サービスの言語",
+    "zh-Hant": "服務提示語言"
+  },
+  "SIM 来电转接": {
+    "en": "SIM call forwarding",
+    "fr": "Transfert des appels SIM",
+    "ja": "SIM 着信転送",
+    "zh-Hant": "SIM 來電轉接"
+  },
+  "Twilio 验证外呼": {
+    "en": "Authenticated Twilio calls",
+    "fr": "Appels Twilio authentifiés",
+    "ja": "Twilio 認証発信",
+    "zh-Hant": "Twilio 驗證外呼"
+  },
+  "短信通知与邮件指令，按需启用。": {
+    "en": "Set up SMS notifications and email commands.",
+    "fr": "Configurez les notifications SMS et les commandes par e-mail.",
+    "ja": "SMS 通知とメールコマンドを設定します。",
+    "zh-Hant": "簡訊通知與郵件指令，按需啟用。"
+  },
+  "收件地址": {
+    "en": "Email address",
+    "fr": "Adresse de réception",
+    "ja": "受信アドレス",
+    "zh-Hant": "收件地址"
+  },
+  "选择设备，并管理 Twilio 连接。": {
+    "en": "Choose your device and manage the Twilio connection.",
+    "fr": "Choisissez le module et gérez la connexion Twilio.",
+    "ja": "デバイスを選択し、Twilio 接続を管理します。",
+    "zh-Hant": "選擇裝置，並管理 Twilio 連線。"
+  },
+  "云端接入": {
+    "en": "Cloud connection",
+    "fr": "Connexion au cloud",
+    "ja": "クラウド接続",
+    "zh-Hant": "雲端接入"
+  },
+  "应用设置": {
+    "en": "App settings",
+    "fr": "Réglages de l’app",
+    "ja": "アプリ設定",
+    "zh-Hant": "應用程式設定"
+  },
+  "语言、更新与本机诊断。": {
+    "en": "Language, updates and local diagnostics.",
+    "fr": "Langue, mises à jour et diagnostics locaux.",
+    "ja": "言語、アップデート、ローカル診断。",
+    "zh-Hant": "語言、更新與本機診斷。"
+  },
+  "当前版本": {
+    "en": "Current version",
+    "fr": "Version actuelle",
+    "ja": "現在のバージョン",
+    "zh-Hant": "目前版本"
+  },
+  "客户端接入凭据": {
+    "en": "Client access credentials",
+    "fr": "Identifiants d’accès du client",
+    "ja": "クライアント接続認証情報",
+    "zh-Hant": "用戶端接入憑證"
+  },
+  "查看本机日志": {
+    "en": "View local log",
+    "fr": "Afficher le journal local",
+    "ja": "ローカルログを表示",
+    "zh-Hant": "查看本機日誌"
+  },
+  "接收的短信与推送状态。": {
+    "en": "Received messages and delivery to Gotify.",
+    "fr": "Messages reçus et état des notifications.",
+    "ja": "受信 SMS と通知の状態。",
+    "zh-Hant": "接收的簡訊與推送狀態。"
+  },
+  "短信发送、来电转接与外呼记录。": {
+    "en": "Sent messages, forwarded calls and outgoing calls.",
+    "fr": "SMS envoyés, appels transférés et appels sortants.",
+    "ja": "SMS 送信、着信転送、発信の履歴。",
+    "zh-Hant": "簡訊發送、來電轉接與外呼記錄。"
+  },
+  "短信原文与原始号码保持不变。": {
+    "en": "Original message text and numbers are preserved.",
+    "fr": "Le texte et les numéros d’origine sont conservés.",
+    "ja": "SMS の原文と元の番号は変更されません。",
+    "zh-Hant": "簡訊原文與原始號碼保持不變。"
+  },
+  "记录操作": {
+    "en": "Record actions",
+    "fr": "Actions sur l’entrée",
+    "ja": "履歴の操作",
+    "zh-Hant": "記錄操作"
+  },
+  "列表操作": {
+    "en": "List actions",
+    "fr": "Actions sur la liste",
+    "ja": "一覧の操作",
+    "zh-Hant": "列表操作"
+  },
+  "按来去方向与号码查找、播放或下载录音。": {
+    "en": "Find, play or download recordings by direction and number.",
+    "fr": "Trouvez, écoutez ou téléchargez par direction et numéro.",
+    "ja": "着信・発信や番号で録音を探し、再生・ダウンロードできます。",
+    "zh-Hant": "按來去方向與號碼尋找、播放或下載錄音。"
+  },
+  "通话结束后，归档录音会显示在这里。": {
+    "en": "Archived recordings appear after a call ends.",
+    "fr": "Les enregistrements archivés apparaissent après l’appel.",
+    "ja": "通話終了後、保存された録音がここに表示されます。",
+    "zh-Hant": "通話結束後，封存錄音會顯示在這裡。"
+  },
+  "搜索号码或内容": {
+    "en": "Search number or content",
+    "fr": "Rechercher un numéro ou du texte",
+    "ja": "番号や内容を検索",
+    "zh-Hant": "搜尋號碼或內容"
+  },
+  "没有匹配的记录": {
+    "en": "No matching records",
+    "fr": "Aucun résultat",
+    "ja": "一致する履歴がありません",
+    "zh-Hant": "沒有相符的記錄"
+  },
+  "尝试其他号码或关键词。": {
+    "en": "Try another number or keyword.",
+    "fr": "Essayez un autre numéro ou mot-clé.",
+    "ja": "別の番号やキーワードをお試しください。",
+    "zh-Hant": "嘗試其他號碼或關鍵字。"
+  },
+  "条记录": {
+    "en": "records",
+    "fr": "entrées",
+    "ja": "件の履歴",
+    "zh-Hant": "筆記錄"
+  },
+  "继续": {
+    "en": "Continue",
+    "fr": "Continuer",
+    "ja": "続ける",
+    "zh-Hant": "繼續"
   }
 }
