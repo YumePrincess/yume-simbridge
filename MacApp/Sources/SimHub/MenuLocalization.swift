@@ -10,13 +10,40 @@ import AppKit
     for code in ["en", "fr", "ja"] where value.hasPrefix(code) { return code }
     return nil
   }
-  static func current() -> String {
-    if let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first,
-      let language = normalize(preferred)
-    {
-      return language
+  static func selection() -> String {
+    let stored = UserDefaults.standard.string(forKey: "clientLanguage") ?? "system"
+    return supported.contains(stored) ? stored : "system"
+  }
+  static func loadSelection() -> String {
+    // Preserve a per-App language chosen in macOS System Settings between launches.
+    let defaults = UserDefaults.standard
+    let own = defaults.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "zone.yume.simhub") ?? [:]
+    if let first = (own["AppleLanguages"] as? [String])?.first {
+      defaults.set(normalize(first) ?? "en", forKey: "clientLanguage")
     }
-    return UserDefaults.standard.string(forKey: "clientLanguage") ?? "zh-Hans"
+    return selection()
+  }
+  static func systemLanguage() -> String {
+    // Read the global domain, excluding this App's explicit AppleLanguages override.
+    let languages = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String] ?? []
+    return resolveSystem(languages)
+  }
+  static func resolveSystem(_ languages: [String]) -> String {
+    languages.first.flatMap(normalize) ?? "en"
+  }
+  static func current() -> String {
+    let selected = selection()
+    return selected == "system" ? systemLanguage() : selected
+  }
+  static func applySelection() {
+    let defaults = UserDefaults.standard
+    let own = defaults.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "zone.yume.simhub") ?? [:]
+    if selection() == "system" {
+      if own["AppleLanguages"] != nil { defaults.removeObject(forKey: "AppleLanguages") }
+    } else if own["AppleLanguages"] as? [String] != [current()] {
+      defaults.set([current()], forKey: "AppleLanguages")
+    }
+    MenuLocalization.apply(language: current())
   }
 }
 @MainActor enum MenuLocalization {

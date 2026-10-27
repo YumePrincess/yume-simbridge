@@ -1498,5 +1498,71 @@
     "fr": "Continuer",
     "ja": "続ける",
     "zh-Hant": "繼續"
+  },
+  "跟随系统": {
+    "en": "Follow System",
+    "fr": "Selon le système",
+    "ja": "システムに従う",
+    "zh-Hant": "跟隨系統"
+  },
+  "外观": {
+    "en": "Appearance",
+    "fr": "Apparence",
+    "ja": "外観",
+    "zh-Hant": "外觀"
+  },
+  "浅色": {
+    "en": "Light",
+    "fr": "Clair",
+    "ja": "ライト",
+    "zh-Hant": "淺色"
+  },
+  "深色": {
+    "en": "Dark",
+    "fr": "Sombre",
+    "ja": "ダーク",
+    "zh-Hant": "深色"
+  },
+  "关于 Yume SIM Hub": {
+    "en": "About Yume SIM Hub",
+    "fr": "À propos de Yume SIM Hub",
+    "ja": "Yume SIM Hub について",
+    "zh-Hant": "關於 Yume SIM Hub"
+  },
+  "版本": {
+    "en": "Version",
+    "fr": "Version",
+    "ja": "バージョン",
+    "zh-Hant": "版本"
+  },
+  "平台": {
+    "en": "Platform",
+    "fr": "Plateforme",
+    "ja": "プラットフォーム",
+    "zh-Hant": "平台"
+  },
+  "连接实体 SIM，让通话与消息自在流转。": {
+    "en": "Connect your SIM. Keep calls and messages flowing.",
+    "fr": "Connectez votre SIM et faites circuler appels et messages.",
+    "ja": "SIM をつないで、通話とメッセージをもっと自由に。",
+    "zh-Hant": "連接實體 SIM，讓通話與訊息自在流轉。"
+  },
+  "版权所有 © 2026 Yume Internet LLC. 保留所有权利。": {
+    "en": "Copyright © 2026 Yume Internet LLC. All rights reserved.",
+    "fr": "Copyright © 2026 Yume Internet LLC. Tous droits réservés.",
+    "ja": "Copyright © 2026 Yume Internet LLC. All rights reserved.",
+    "zh-Hant": "版權所有 © 2026 Yume Internet LLC. 保留所有權利。"
+  },
+  "跟随系统使用首选语言；不支持的系统语言使用英语。客户端语言同步到 macOS 菜单栏。": {
+    "en": "Uses your preferred system language, or English if unsupported. The macOS menu bar follows the client language.",
+    "fr": "Utilise la langue préférée du système, ou l’anglais si elle n’est pas prise en charge. Les menus macOS suivent la langue du client.",
+    "ja": "システムの優先言語を使用します。未対応の場合は英語になります。macOS のメニューも同じ言語に切り替わります。",
+    "zh-Hant": "跟隨系統使用首選語言；不支援的系統語言使用英語。用戶端語言同步至 macOS 選單列。"
+  },
+  "关于": {
+    "en": "About",
+    "fr": "À propos",
+    "ja": "このアプリについて",
+    "zh-Hant": "關於"
   }
 }

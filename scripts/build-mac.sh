@@ -40,6 +40,7 @@ PYRUNTIME
 cp Mac/runtime-cache/libusb-1.0.0.dylib "$APP/Contents/Resources/Mac/bin/"
 cp Mac/runtime-cache/libusb-LICENSE.txt "$APP/Contents/Resources/"
 cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp MacApp/SimHubLogo.png "$APP/Contents/Resources/SimHubLogo.png"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
 cp Mac/tools/module_select.py Mac/tools/adb_server.py Mac/tools/runtime_health.py Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"

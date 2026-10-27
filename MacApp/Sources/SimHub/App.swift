@@ -90,12 +90,34 @@ struct Bootstrap: Codable {
   private var refreshInFlight = false
   private var stateRefreshAfter = Date.distantPast
   private var recordingsRefreshAfter = Date.distantPast
-  @Published var language = ClientLanguage.current() {
+  private var resolvedLanguage = ClientLanguage.current()
+  @Published var language = ClientLanguage.loadSelection() {
     didSet {
       UserDefaults.standard.set(language, forKey: "clientLanguage")
-      UserDefaults.standard.set([language], forKey: "AppleLanguages")
-      MenuLocalization.apply(language: language)
+      resolvedLanguage = ClientLanguage.current()
+      ClientLanguage.applySelection()
     }
+  }
+  @Published var appearance = UserDefaults.standard.string(forKey: "clientAppearance") ?? "system" {
+    didSet {
+      UserDefaults.standard.set(appearance, forKey: "clientAppearance")
+      applyAppearance()
+    }
+  }
+  @Published var showAbout = false
+  func applyAppearance() {
+    switch appearance {
+    case "light": NSApplication.shared.appearance = NSAppearance(named: .aqua)
+    case "dark": NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+    default: NSApplication.shared.appearance = nil
+    }
+  }
+  func refreshSystemPreferences() {
+    let current = ClientLanguage.current()
+    guard language == "system", current != resolvedLanguage else { return }
+    resolvedLanguage = current
+    objectWillChange.send()
+    ClientLanguage.applySelection()
   }
   @Published var showSetup = false
   @Published var setupBusy = false
@@ -138,6 +160,9 @@ struct Bootstrap: Codable {
     for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(
       "YumeSimHub", isDirectory: true)
   init() {
+    resolvedLanguage = ClientLanguage.current()
+    ClientLanguage.applySelection()
+    applyAppearance()
     for path in [
       folder.appendingPathComponent("credentials.json"), folder.appendingPathComponent("edge.json"),
     ] {
@@ -170,7 +195,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27007")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27017")"
   }
   @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
   func openReleasePage() {
@@ -646,7 +671,7 @@ struct Bootstrap: Codable {
   }
   func dateString(_ value: Double) -> String {
     let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: language)
+    formatter.locale = Locale(identifier: ClientLanguage.current())
     formatter.dateStyle = .medium
     formatter.timeStyle = .medium
     return formatter.string(from: Date(timeIntervalSince1970: value / 1000))
@@ -689,13 +714,20 @@ struct Bootstrap: Codable {
     WindowGroup("Yume SIM Hub") {
       Content(model: model).frame(minWidth: 1000, minHeight: 700).onAppear { delegate.model = model }
     }.defaultSize(width: 1180, height: 820)
-    SwiftUI.Settings { ClientPreferences(model: model).frame(width: 520, height: 230) }
+      .commands {
+        CommandGroup(replacing: .appInfo) {
+          Button(L("关于 Yume SIM Hub")) { model.showAbout = true }
+        }
+      }
+    SwiftUI.Settings { ClientPreferences(model: model).frame(width: 560, height: 300) }
 
   }
 }
 struct LanguageOptions: View {
+  var includesSystem = false
   var body: some View {
     Group {
+      if includesSystem { Text(L("跟随系统")).tag("system") }
       Text("English").tag("en")
       Text("Français").tag("fr")
       Text("日本語").tag("ja")
@@ -709,11 +741,13 @@ struct ClientPreferences: View {
   var body: some View {
     Form {
       Section(L("客户端设置")) {
-        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions() }
+        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions(includesSystem: true) }
         Text(L("客户端语言同步到 macOS 菜单栏，也可在系统设置中选择应用语言。")).font(.caption).foregroundStyle(.secondary)
-        Text(model.versionLabel).font(.caption)
+        AppearancePicker(model: model)
+        Button(L("关于 Yume SIM Hub")) { model.showAbout = true }
       }
     }.formStyle(.grouped)
+      .sheet(isPresented: $model.showAbout) { AboutView(model: model) }
   }
 }
 

@@ -62,14 +62,19 @@ struct Content: View {
       .toolbar { toolbar }
     }
     .navigationSplitViewStyle(.balanced)
-    .environment(\.locale, Locale(identifier: model.language))
+    .environment(\.locale, Locale(identifier: ClientLanguage.current()))
     .onChange(of: model.selectedTab) { _, _ in
       search = ""
       Task { await model.refresh(force: false) }
     }
     .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+      model.refreshSystemPreferences()
       Task { await model.refresh(force: false) }
     }
+    .onReceive(NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)) { _ in
+      model.refreshSystemPreferences()
+    }
+    .sheet(isPresented: $model.showAbout) { AboutView(model: model) }
     .sheet(isPresented: $model.showTOTPSetup, onDismiss: { model.clearTOTPSetup() }) {
       TOTPSetupView(model: model)
     }
@@ -79,8 +84,7 @@ struct Content: View {
   private var sidebar: some View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
-        Image(systemName: "simcard.fill").font(.title2).foregroundStyle(.tint)
-          .frame(width: 36, height: 36).background(.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+        HubLogo(size: 36)
         VStack(alignment: .leading, spacing: 2) {
           Text("Yume SIM Hub").font(.headline)
           Text(L("Mac 蜂窝通信中枢")).font(.caption).foregroundStyle(.secondary)
@@ -100,7 +104,6 @@ struct Content: View {
           Circle().fill(ready ? .green : (model.running ? .orange : .secondary)).frame(width: 7, height: 7)
           Text(L(serviceTitle)).font(.callout.weight(.medium))
         }
-        Text(model.versionLabel).font(.caption2).foregroundStyle(.secondary)
         Text("worker.example.com").font(.caption2).foregroundStyle(.tertiary)
       }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
     }
@@ -165,21 +168,22 @@ struct Content: View {
             Text(L("模块、通话与消息，一处管理。")).foregroundStyle(.secondary)
           }
           Spacer(minLength: 0)
+          HubLogo(size: 72)
         }.padding(.top, 8)
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        EqualHeightRow(spacing: 12) {
           healthTile("模块", value: model.edge.online == true ? "在线" : "离线", symbol: "simcard", good: model.edge.online == true)
           healthTile("音频", value: model.edge.voiceReady == true ? "就绪" : "未就绪", symbol: "waveform", good: model.edge.voiceReady == true)
           healthTile("SIP", value: model.edge.sipRegistered == true ? "已注册" : "未注册", symbol: "network", good: model.edge.sipRegistered == true)
           healthTile("通话", value: model.edge.online != true ? "不可用" : (model.edge.busy == true ? "使用中" : "空闲"), symbol: "phone", good: model.edge.online == true)
         }
         overviewRoutes
-        LazyVGrid(columns: [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)], spacing: 16) {
-          HubCard(title: L("消息自动化"), symbol: "bolt.badge.clock") {
+        EqualHeightRow(spacing: 16) {
+          HubCard(title: L("消息自动化"), symbol: "bolt.badge.clock", fillsHeight: true) {
             summaryLine("Gotify 短信推送", value: model.settings.gotifyConfigured ? "已配置" : "未配置")
             summaryLine("邮件发送短信", value: model.settings.emailEnabled ? "已启用" : "已停用")
             Button(L("管理消息自动化")) { model.selectedTab = 6 }.buttonStyle(.link)
           }
-          HubCard(title: L("当前模块"), symbol: "simcard") {
+          HubCard(title: L("当前模块"), symbol: "simcard", fillsHeight: true) {
             Text(activeModule).font(.callout.weight(.medium)).textSelection(.enabled)
             Text(L("设备与音频绑定至同一 USB 端口。"))
               .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -240,7 +244,7 @@ struct Content: View {
         Image(systemName: good ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(good ? .green : .secondary)
         Text(L(value)).font(.callout.weight(.semibold))
       }
-    }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
+    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(16)
       .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
       .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.separator.opacity(0.35)))
   }
@@ -345,14 +349,17 @@ struct Content: View {
     Form {
       Section { pageIntro("应用设置", subtitle: "语言、更新与本机诊断。", symbol: "gearshape") }
       Section(L("客户端设置")) {
-        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions() }
-        help("客户端语言同步到 macOS 菜单栏，也可在系统设置中选择应用语言。")
+        Picker(L("客户端语言"), selection: $model.language) { LanguageOptions(includesSystem: true) }
+        help("跟随系统使用首选语言；不支持的系统语言使用英语。客户端语言同步到 macOS 菜单栏。")
+        AppearancePicker(model: model)
         Toggle(L("登录 Mac 后启动"), isOn: Binding(get: { model.loginItem }, set: { model.setLoginItem($0) }))
         help("关闭窗口会继续运行；退出客户端会停止模块服务。运行时防止 Mac 自动睡眠。")
       }
       Section(L("安装与更新")) {
-        LabeledContent(L("当前版本")) { Text(model.versionLabel).foregroundStyle(.secondary) }
         Button { model.showSetup = true } label: { Label(L("打开安装 / 更新向导"), systemImage: "arrow.down.app") }
+      }
+      Section(L("关于")) {
+        Button { model.showAbout = true } label: { Label(L("关于 Yume SIM Hub"), systemImage: "info.circle") }
       }
       Section(L("客户端接入凭据")) {
         SecureField(L("客户端凭据（保存在本机受限配置）"), text: $model.accessToken)
@@ -523,12 +530,13 @@ struct Content: View {
 private struct HubCard<Content: View>: View {
   let title: String
   let symbol: String
+  var fillsHeight = false
   @ViewBuilder var content: Content
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Label(title, systemImage: symbol).font(.headline)
       content
-    }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+    }.padding(20).frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
       .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 16))
       .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.separator.opacity(0.35)))
   }
@@ -556,7 +564,7 @@ struct SetupAssistantView: View {
         }
         Spacer()
       }
-      Picker(L("客户端语言"), selection: $model.language) { LanguageOptions() }
+      Picker(L("客户端语言"), selection: $model.language) { LanguageOptions(includesSystem: true) }
       Text(L("运行环境已包含在 App 内，无需安装开发工具。配置与运行数据仅保存在本机 Application Support。"))
         .font(.callout).foregroundStyle(.secondary)
       VStack(spacing: 0) {
