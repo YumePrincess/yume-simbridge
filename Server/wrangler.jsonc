@@ -14,6 +14,8 @@
     "binding": "ASSETS",
     "run_worker_first": true,
   },
+  "durable_objects": { "bindings": [{ "name": "WAKE_HUB", "class_name": "WakeHub" }] },
+  "migrations": [{ "tag": "v1-wake-hub", "new_sqlite_classes": ["WakeHub"] }],
   "services": [{ "binding": "GOTIFY", "service": "yume-gotify" }],
   "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "yume-oss" }],
   "d1_databases": [

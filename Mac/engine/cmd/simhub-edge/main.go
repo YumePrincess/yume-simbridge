@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27013"
+var Build = "27014"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -67,6 +67,13 @@ type engine struct {
 	registered                          atomic.Bool
 	inbound                             atomic.Bool
 	voiceReady                          atomic.Bool
+	cloudPolicy                         syncPolicy
+	cloudWake                           atomic.Bool
+	jobWake                             atomic.Bool
+	wakeConnected                       atomic.Bool
+	wakeCh                              chan struct{}
+	wakeStamp                           int64
+	cloudSyncCount                      uint64
 	callMu                              sync.Mutex
 	callID                              modem.CallID
 	callCancel                          context.CancelFunc
@@ -129,7 +136,7 @@ func main() {
 	if err != nil {
 		slog.Warn("modem probe failed", "error", err)
 	}
-	e := &engine{rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
+	e := &engine{wakeCh: make(chan struct{}, 1), rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
 	e.voiceReady.Store(*rx != "" && *tx != "")
 	ua, err := sipgo.NewUA(sipgo.WithUserAgent("simhub"))
 	if err != nil {
@@ -143,6 +150,7 @@ func main() {
 			cancel()
 		}
 	}()
+	go e.cloudWakeLoop(ctx)
 	go e.voiceRecoveryLoop(ctx)
 	go e.modemEvents(ctx)
 	go e.registerLoop(ctx)
@@ -155,6 +163,7 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-e.wakeCh:
 		}
 	}
 }
@@ -195,10 +204,29 @@ func (e *engine) sync(ctx context.Context) {
 	var reply syncReply
 	connected := err == nil
 	voice := connected && e.voiceReady.Load() && audioHealthy(filepath.Join(e.healthDir, "audio-health.json"), time.Now())
-	health := map[string]any{"modemConnected": connected, "sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": voice, "sipRegistered": e.registered.Load(), "busy": connected && e.busy.Load(), "version": Version + " (" + Build + ")", "updated": time.Now().UnixMilli()}
+	health := map[string]any{"modemConnected": connected, "sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": voice, "sipRegistered": e.registered.Load(), "busy": connected && e.busy.Load(), "version": Version + " (" + Build + ")", "updated": time.Now().UnixMilli(), "heartbeatSeconds": 30, "cloudSyncCount": e.cloudSyncCount, "cloudPushConnected": e.wakeConnected.Load()}
 	writeHealth(filepath.Join(e.healthDir, "edge-health.json"), health)
+	state := cloudSyncState{connected, voice, e.registered.Load(), connected && e.busy.Load(), string(status.SIM), string(status.Registration)}
+	wake := e.cloudWake.Swap(false)
+	if info, statErr := os.Stat(filepath.Join(e.healthDir, "cloud-wake")); statErr == nil && info.ModTime().UnixNano() != e.wakeStamp {
+		e.wakeStamp = info.ModTime().UnixNano()
+		wake = true
+	}
+	if !e.cloudPolicy.due(time.Now(), state, wake) {
+		if wake {
+			e.cloudWake.Store(true)
+		}
+		return
+	}
+	claim := e.jobWake.Swap(false) || !e.wakeConnected.Load()
+	health["claimJobs"] = claim
+	e.cloudSyncCount++
 	err = e.api(ctx, "/edge/sync", health, &reply)
+	e.cloudPolicy.complete(time.Now(), state, err == nil, reply.Job != nil)
 	if err != nil {
+		if claim {
+			e.jobWake.Store(true)
+		}
 		slog.Warn("cloud disconnected", "error", err)
 		return
 	}
@@ -209,6 +237,7 @@ func (e *engine) sync(ctx context.Context) {
 	e.uploadMessages(ctx)
 	e.uploadResults(ctx)
 	if reply.Job != nil {
+		e.jobWake.Store(true)
 		e.sendSMS(ctx, *reply.Job)
 	}
 }
@@ -286,6 +315,10 @@ func (e *engine) inboxLoop(ctx context.Context) {
 				}
 			}
 			cancel()
+			var pending int
+			if e.database.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE direction='inbound' AND id NOT IN (SELECT id FROM uploaded)").Scan(&pending) == nil && pending > 0 {
+				e.cloudWake.Store(true)
+			}
 		}
 		select {
 		case <-ctx.Done():

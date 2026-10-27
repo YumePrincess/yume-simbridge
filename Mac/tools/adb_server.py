@@ -1,4 +1,5 @@
 """Module-only access to an already running local ADB server; never starts/kills it."""
+import module_select
 import os
 import plistlib
 import re
@@ -16,7 +17,9 @@ def module_paths(vendor, product):
     def visit(item):
         if isinstance(item, dict):
             if item.get('idVendor') == vendor and item.get('idProduct') == product and isinstance(item.get('locationID'), int):
-                found.add(str(item['locationID']) + 'X')
+                selected = module_select.selected_location()
+                if selected is None or selected == item['locationID']:
+                    found.add(str(item['locationID']) + 'X')
             for value in item.values(): visit(value)
         elif isinstance(item, list):
             for value in item: visit(value)

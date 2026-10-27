@@ -1,3 +1,4 @@
+import Darwin
 import AVFoundation
 import AppKit
 import CoreImage.CIFilterBuiltins
@@ -81,6 +82,14 @@ struct Bootstrap: Codable {
 }
 @MainActor final class Model: ObservableObject {
   private var healthTimer: Timer?
+  @Published var availableModules: [HardwareHealth.Module] = []
+  @Published var selectedModule = UserDefaults.standard.string(forKey: "selectedModule") ?? "" {
+    didSet { UserDefaults.standard.set(selectedModule, forKey: "selectedModule") }
+  }
+  @Published var selectedTab = 0
+  private var refreshInFlight = false
+  private var stateRefreshAfter = Date.distantPast
+  private var recordingsRefreshAfter = Date.distantPast
   @Published var language = ClientLanguage.current() {
     didSet {
       UserDefaults.standard.set(language, forKey: "clientLanguage")
@@ -151,7 +160,7 @@ struct Bootstrap: Codable {
       Task { @MainActor in self?.refreshLocalHealth() }
     }
     timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-      Task { @MainActor in await self?.refresh() }
+      Task { @MainActor in await self?.refresh(force: false) }
     }
     Task {
       await refresh()
@@ -279,30 +288,52 @@ struct Bootstrap: Codable {
       try? JSONDecoder().decode(Edge.self, from: $0)
     }
     let age = Date().timeIntervalSince1970 * 1000 - (local?.updated ?? 0)
+    availableModules = HardwareHealth.modules()
+    let selection = (try? Data(contentsOf: folder.appendingPathComponent("runtime/module-selection.json"))).flatMap {
+      try? JSONSerialization.jsonObject(with: $0) as? [String: String]
+    }?["location"] ?? ""
+    let bound = selectedModule.isEmpty ? selection : selectedModule
+    let present = bound.isEmpty ? availableModules.count == 1 : availableModules.contains { $0.id == bound }
     let connected =
-      running && HardwareHealth.modulePresent() && age >= 0 && age < 12000
+      running && present && age >= 0 && age < 12000
       && local?.modemConnected == true
     edge.online = connected
     edge.voiceReady = connected && local?.voiceReady == true
     edge.sipRegistered = connected && local?.sipRegistered == true
     edge.busy = connected ? local?.busy : nil
   }
-  func refresh() async {
-    do {
-      let s = try JSONDecoder().decode(Snapshot.self, from: await request("/edge/state"))
-      if !loaded {
-        settings = s.settings
-        senderText = s.settings.allowedSenders.joined(separator: "\n")
-        loaded = true
+  func refresh(force: Bool = true) async {
+    guard !refreshInFlight else { return }
+    let visible = NSApp.windows.contains { $0.isVisible && !$0.isMiniaturized && $0.canBecomeMain }
+    guard force || visible else { return }
+    refreshInFlight = true
+    defer { refreshInFlight = false }
+    let now = Date()
+    if force || now >= stateRefreshAfter {
+      stateRefreshAfter = now.addingTimeInterval(60)
+      do {
+        let s = try JSONDecoder().decode(Snapshot.self, from: await request("/edge/state"))
+        if !loaded {
+          settings = s.settings
+          senderText = s.settings.allowedSenders.joined(separator: "\n")
+          loaded = true
+        }
+        edge = s.edge
+        messages = s.events
+        jobs = s.jobs
+      } catch {
+        stateRefreshAfter = Date().addingTimeInterval(300)
+        if !loaded { notice = error.localizedDescription }
       }
-      edge = s.edge
-      refreshLocalHealth()
-      messages = s.events
-      jobs = s.jobs
-      recordings = try JSONDecoder().decode(
-        [RecordingInfo].self, from: await request("/edge/recordings"))
-      readLog()
-    } catch { if !loaded { notice = error.localizedDescription } }
+    }
+    if selectedTab == 4 && (force || now >= recordingsRefreshAfter) {
+      recordingsRefreshAfter = now.addingTimeInterval(60)
+      do {
+        recordings = try JSONDecoder().decode([RecordingInfo].self, from: await request("/edge/recordings"))
+      } catch { recordingsRefreshAfter = Date().addingTimeInterval(300) }
+    }
+    refreshLocalHealth()
+    readLog()
   }
   func save() async {
     saving = true
@@ -322,6 +353,7 @@ struct Bootstrap: Codable {
       gotifyToken = ""
       twilioToken = ""
       sipPassword = ""
+      wakeRuntime()
       notice = L("配置已保存")
       await refresh()
     } catch { notice = error.localizedDescription }
@@ -387,8 +419,18 @@ struct Bootstrap: Codable {
       loginItem = enabled
     } catch { notice = error.localizedDescription }
   }
+  func wakeRuntime() {
+    let path = folder.appendingPathComponent("runtime/cloud-wake")
+    try? Data().write(to: path, options: .atomic)
+    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+  }
   func start() {
     guard process == nil else { return }
+    availableModules = HardwareHealth.modules()
+    guard !selectedModule.isEmpty || availableModules.count <= 1 else {
+      notice = L("检测到多个模块，请先选择要启用的模块。")
+      return
+    }
     shouldRun = true
     do {
       guard let resources = Bundle.main.resourceURL else { throw CocoaError(.fileReadCorruptFile) }
@@ -414,6 +456,7 @@ struct Bootstrap: Codable {
       }
       let logFile = try FileHandle(forWritingTo: logURL)
       try logFile.seekToEnd()
+      _ = fcntl(logFile.fileDescriptor, F_SETFL, fcntl(logFile.fileDescriptor, F_GETFL) | O_APPEND)
       let p = Process()
       p.executableURL = URL(
         fileURLWithPath: python)
@@ -423,7 +466,10 @@ struct Bootstrap: Codable {
         "--data", folder.appendingPathComponent("runtime").path,
       ]
       p.currentDirectoryURL = resources
-      p.environment = BundledRuntime.environment(resources: resources)
+      var environment = BundledRuntime.environment(resources: resources)
+      if !selectedModule.isEmpty { environment["SIMHUB_MODULE_LOCATION"] = selectedModule }
+      else if availableModules.count == 1 { environment["SIMHUB_MODULE_LOCATION"] = availableModules[0].id }
+      p.environment = environment
       p.standardOutput = logFile
       p.standardError = logFile
       p.terminationHandler = { [weak self] _ in
@@ -561,6 +607,43 @@ struct Bootstrap: Codable {
         ? L("测试通知已送达 Gotify") : L("Gotify 推送失败") + ": " + (result?["error"] as? String ?? "")
     } catch { notice = error.localizedDescription }
   }
+  func removeHistory(inbox: Bool, id: String? = nil) async {
+    if id == nil {
+      let alert = NSAlert()
+      alert.messageText = L("清空列表？")
+      alert.informativeText = L("仅移除历史列表，保留内部去重信息；不会中断待办任务或删除通话录音。")
+      alert.addButton(withTitle: L("清空列表")); alert.addButton(withTitle: L("取消"))
+      guard alert.runModal() == .alertFirstButtonReturn else { return }
+    }
+    do {
+      let escaped = id?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/%?#")))
+      _ = try await request("/edge/history/" + (inbox ? "sms" : "jobs") + (escaped.map { "/" + $0 } ?? ""), method: "DELETE")
+      if inbox { messages.removeAll { id == nil || $0.id == id } }
+      else { jobs.removeAll { id == nil || $0.id == id } }
+      notice = L("历史列表已更新")
+    } catch { notice = error.localizedDescription }
+  }
+  func clearRecordings() async {
+    let alert = NSAlert()
+    alert.messageText = L("清空全部通话录音？")
+    alert.informativeText = L("将永久删除全部云端录音及 Twilio 副本，包括未显示的更早录音，无法恢复。")
+    alert.addButton(withTitle: L("清空全部录音")); alert.addButton(withTitle: L("取消"))
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    do {
+      _ = try await request("/edge/recordings", method: "DELETE")
+      stopPlayback()
+      notice = L("录音已加入删除队列")
+      await refresh()
+    } catch { notice = error.localizedDescription }
+  }
+  func clearLocalLog() {
+    do {
+      let file = try FileHandle(forWritingTo: folder.appendingPathComponent("runtime.log"))
+      defer { try? file.close() }
+      try file.truncate(atOffset: 0)
+      log = ""
+    } catch { notice = error.localizedDescription }
+  }
   func dateString(_ value: Double) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: language)
@@ -642,8 +725,19 @@ struct Content: View {
       if !model.notice.isEmpty {
         Text(L(model.notice)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
       }
-      TabView {
+      TabView(selection: $model.selectedTab) {
         Form {
+          Section(L("模块选择")) {
+            Picker(L("启用的 DJI 模块"), selection: $model.selectedModule) {
+              Text(L("自动选择（仅连接一个模块时）")).tag("")
+              ForEach(model.availableModules) { module in Text(module.label).tag(module.id) }
+              if !model.selectedModule.isEmpty && !model.availableModules.contains(where: { $0.id == model.selectedModule }) {
+                Text(L("未连接") + " · USB " + model.selectedModule).tag(model.selectedModule)
+              }
+            }.disabled(model.running)
+            Text(L("按 USB 端口绑定；更换端口后请重新选择。先停止服务再切换模块；所选模块拔出时不会改用其他模块。"))
+              .font(.caption).foregroundStyle(.secondary)
+          }
           Section(L("电话路由")) {
             Picker(
               L("服务提示语言（电话 / Gotify）"),
@@ -764,6 +858,7 @@ struct Content: View {
           HStack {
             Text(L("录音从振铃到挂断 · 双声道 · R2 simhub/ 加密归档")).font(.caption).foregroundStyle(.secondary)
             Spacer()
+            Button(L("清空全部录音"), role: .destructive) { Task { await model.clearRecordings() } }.disabled(model.recordings.isEmpty)
             Button(L("更早录音")) { Task { await model.olderRecordings() } }
           }
         }.padding(12).tabItem { Label(L("通话录音"), systemImage: "waveform") }.tag(4)
@@ -790,6 +885,7 @@ struct Content: View {
             Button(L("保存客户端凭据")) { model.importToken() }
           }
           Section(L("运行日志")) {
+            Button(L("清空本机日志"), role: .destructive) { model.clearLocalLog() }
             ScrollView {
               Text(model.log.isEmpty ? L("暂无日志") : model.log).font(
                 .system(.caption, design: .monospaced)
@@ -797,6 +893,10 @@ struct Content: View {
             }.frame(height: 190)
           }
         }.formStyle(.grouped).tabItem { Label(L("接入与运行"), systemImage: "network") }.tag(3)
+      }
+      .onChange(of: model.selectedTab) { _, _ in Task { await model.refresh(force: false) } }
+      .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        Task { await model.refresh(force: false) }
       }
       HStack {
         Text(L("worker.example.com · 配置仅在客户端访问")).font(.caption).foregroundStyle(.secondary)
@@ -876,11 +976,10 @@ struct Content: View {
   }
   func records(_ rows: [Record], inbox: Bool) -> some View {
     VStack {
-      if inbox {
-        HStack {
-          Spacer()
-          Button(L("重试待推送短信")) { Task { await model.retry() } }
-        }
+      HStack {
+        if inbox { Button(L("重试待推送短信")) { Task { await model.retry() } } }
+        Spacer()
+        Button(L("清空列表"), role: .destructive) { Task { await model.removeHistory(inbox: inbox) } }.disabled(rows.isEmpty)
       }
       List(rows) { r in
         VStack(alignment: .leading, spacing: 8) {
@@ -890,6 +989,7 @@ struct Content: View {
             Text(L(inbox ? (r.notified == 1 ? L("已推送") : L("待推送")) : (r.status ?? ""))).font(
               .caption)
           }
+          Button(L("删除"), role: .destructive) { Task { await model.removeHistory(inbox: inbox, id: r.id) } }
           Text(recordRoute(r, inbox: inbox)).font(.caption).foregroundStyle(.secondary)
             .textSelection(.enabled)
           if let body = r.data["body"] { Text(body).textSelection(.enabled) }

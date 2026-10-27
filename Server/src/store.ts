@@ -1,3 +1,4 @@
+import { wakeEdge } from "./wake";
 import { fail } from "./util";
 export const now = () => Date.now();
 export async function limit(
@@ -37,6 +38,7 @@ export async function enqueue(
   )
     .bind(id, kind, JSON.stringify(payload), now(), now())
     .run();
+  if (kind === "sms") await wakeEdge(env);
   return id;
 }
 export async function online(env: Env) {
@@ -52,7 +54,9 @@ export async function online(env: Env) {
       busy: false,
     };
   const value = JSON.parse(e.value);
-  const fresh = now() - e.updated < 15000;
+  const maxAge = value.heartbeatSeconds === 30 ? 90000 : 15000;
+  const age = now() - e.updated;
+  const fresh = age >= 0 && age < maxAge;
   const connected = fresh && value.modemConnected === true;
   return {
     ...value,

@@ -18,6 +18,7 @@ import time
 import urllib.request
 
 from adb_server import ServerADB
+import module_select
 import usb_backend
 import usb.core
 import usb.util
@@ -98,6 +99,7 @@ class ADBClient:
         candidates = []
         for vendor, product in [(VENDOR_ID, PRODUCT_ID), (ALT_VENDOR_ID, ALT_PRODUCT_ID)]:
             for dev in usb.core.find(find_all=True, idVendor=vendor, idProduct=product):
+                if not module_select.matches(dev): continue
                 for intf in dev.get_active_configuration():
                     # Enabling USB audio moves ADB from interface 6 to 5. The
                     # interface number alone can now identify the audio device!

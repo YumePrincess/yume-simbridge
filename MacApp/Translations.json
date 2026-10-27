@@ -1114,5 +1114,89 @@
     "fr": "Appuyez sur 1 dans le délai prévu après l’annonce. L’audio reste isolé jusqu’à acceptation.",
     "ja": "サービス言語の案内後、設定時間内に 1 を押してください。確認前に転送先の音声は中継されません。",
     "zh-Hant": "接聽者須在服務語言提示結束後設定秒數內按 1；確認前不會轉播目標方的聲音。"
+  },
+  "模块选择": {
+    "en": "Module selection",
+    "fr": "Choix du module",
+    "ja": "モジュール選択",
+    "zh-Hant": "模組選擇"
+  },
+  "启用的 DJI 模块": {
+    "en": "Active DJI module",
+    "fr": "Module DJI actif",
+    "ja": "使用する DJI モジュール",
+    "zh-Hant": "啟用的 DJI 模組"
+  },
+  "自动选择（仅连接一个模块时）": {
+    "en": "Automatic (one connected module only)",
+    "fr": "Automatique (un seul module connecté)",
+    "ja": "自動選択（接続が 1 台の場合のみ）",
+    "zh-Hant": "自動選擇（僅連接一個模組時）"
+  },
+  "未连接": {
+    "en": "Disconnected",
+    "fr": "Déconnecté",
+    "ja": "未接続",
+    "zh-Hant": "未連接"
+  },
+  "按 USB 端口绑定；更换端口后请重新选择。先停止服务再切换模块；所选模块拔出时不会改用其他模块。": {
+    "en": "Bound to the USB port; select again after changing ports. Stop the service before switching. Unplugging the selected module will not activate another.",
+    "fr": "Lié au port USB ; sélectionnez à nouveau après un changement de port. Arrêtez le service avant de changer de module. Aucun autre module ne sera activé automatiquement.",
+    "ja": "USB ポートに紐づきます。ポート変更後は再選択してください。切替前にサービスを停止してください。取り外しても別のモジュールには切り替わりません。",
+    "zh-Hant": "按 USB 連接埠綁定；更換連接埠後請重新選擇。先停止服務再切換模組；所選模組拔出時不會改用其他模組。"
+  },
+  "检测到多个模块，请先选择要启用的模块。": {
+    "en": "Multiple modules detected. Select one to activate.",
+    "fr": "Plusieurs modules détectés. Sélectionnez celui à activer.",
+    "ja": "複数のモジュールが見つかりました。使用する 1 台を選択してください。",
+    "zh-Hant": "偵測到多個模組，請先選擇要啟用的模組。"
+  },
+  "清空列表": {
+    "en": "Clear list",
+    "fr": "Vider la liste",
+    "ja": "一覧を消去",
+    "zh-Hant": "清空列表"
+  },
+  "清空列表？": {
+    "en": "Clear this list?",
+    "fr": "Vider cette liste ?",
+    "ja": "一覧を消去しますか？",
+    "zh-Hant": "清空列表？"
+  },
+  "仅移除历史列表，保留内部去重信息；不会中断待办任务或删除通话录音。": {
+    "en": "Removes history from the list while retaining internal deduplication data. Pending tasks and recordings are preserved.",
+    "fr": "Retire l’historique de la liste en conservant les données internes de déduplication. Les tâches et enregistrements sont conservés.",
+    "ja": "内部の重複防止情報を保持して履歴を一覧から削除します。未処理タスクや通話録音は削除しません。",
+    "zh-Hant": "僅移除歷史列表，保留內部去重資訊；不會中斷待辦任務或刪除通話錄音。"
+  },
+  "历史列表已更新": {
+    "en": "History updated",
+    "fr": "Historique mis à jour",
+    "ja": "履歴を更新しました",
+    "zh-Hant": "歷史列表已更新"
+  },
+  "清空全部通话录音？": {
+    "en": "Delete all call recordings?",
+    "fr": "Supprimer tous les enregistrements ?",
+    "ja": "すべての通話録音を削除しますか？",
+    "zh-Hant": "清空全部通話錄音？"
+  },
+  "清空全部录音": {
+    "en": "Delete all recordings",
+    "fr": "Supprimer tous les enregistrements",
+    "ja": "すべての録音を削除",
+    "zh-Hant": "清空全部錄音"
+  },
+  "将永久删除全部云端录音及 Twilio 副本，包括未显示的更早录音，无法恢复。": {
+    "en": "Permanently deletes all cloud recordings and Twilio copies, including older recordings not displayed. This cannot be undone.",
+    "fr": "Supprime définitivement tous les enregistrements cloud et les copies Twilio, y compris les plus anciens non affichés. Irréversible.",
+    "ja": "表示されていない過去の録音を含め、クラウド録音と Twilio のコピーをすべて完全に削除します。元に戻せません。",
+    "zh-Hant": "將永久刪除全部雲端錄音及 Twilio 副本，包括未顯示的更早錄音，無法恢復。"
+  },
+  "清空本机日志": {
+    "en": "Clear local log",
+    "fr": "Effacer le journal local",
+    "ja": "ローカルログを消去",
+    "zh-Hant": "清空本機日誌"
   }
 }

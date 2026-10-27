@@ -62,9 +62,19 @@ publish_offline()
 sys.path.insert(0,str(root/"tools"))
 import usb_backend
 import usb.core
+import module_select
+selected = None
 for _ in range(90):
-    if usb.core.find(idVendor=0x2CA3,idProduct=0x4006) is not None:break
+    try: selected = module_select.find_module(usb_backend.backend)
+    except RuntimeError as error:
+        print(str(error), flush=True); stop()
+    if selected is not None: break
     time.sleep(1)
+if selected is None:
+    print('Selected module not connected', flush=True); stop()
+location = module_select.usb_location(selected)
+os.environ['SIMHUB_MODULE_LOCATION'] = str(location)
+(data/'module-selection.json').write_text(json.dumps({'location':str(location)}))
 cache=data/'module-runtime'
 cache.mkdir(mode=0o700,exist_ok=True)
 os.environ['SIMHUB_VOICE_RUNTIME']=str(cache)
@@ -107,7 +117,7 @@ def health(name):
     except (OSError,ValueError):return {}
 try:
     while not stopping:
-        if usb.core.find(idVendor=0x2CA3,idProduct=0x4006) is None:
+        if module_select.find_module(usb_backend.backend) is None:
             print('USB module disconnected; restarting runtime',flush=True)
             break
         if any(p.poll() is not None for p in children):

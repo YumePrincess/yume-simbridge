@@ -22,6 +22,7 @@ import sys
 import time
 import threading
 
+import module_select
 import usb_backend
 import usb.core
 import usb.util
@@ -39,7 +40,9 @@ def log(msg):
 
 def open_usb():
     while True:
-        dev = usb.core.find(idVendor=VID, idProduct=PID)
+        try: dev = module_select.find_module(usb_backend.backend)
+        except RuntimeError as error:
+            log(str(error)); time.sleep(2); continue
         if dev is not None:
             try:
                 try:

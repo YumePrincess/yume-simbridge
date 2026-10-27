@@ -1,3 +1,6 @@
+import { removeHistory } from "./history";
+export { WakeHub } from "./wake-hub";
+import { wakeEdge } from "./wake";
 import { config, updateConfig, publicConfig } from "./config";
 import { equal, fail, HttpError, readBytes } from "./util";
 import release from "../../version.json";
@@ -34,6 +37,19 @@ async function edgeAPI(
     !equal(req.headers.get("Authorization") || "", "Bearer " + env.EDGE_TOKEN)
   )
     fail("Unauthorized", 401);
+  if (path === "/edge/wake" && req.method === "GET")
+    return env.WAKE_HUB.getByName("module").fetch(req);
+  if (path.startsWith("/edge/history/") && req.method === "DELETE") {
+    await removeHistory(env, path);
+    return json({ ok: true });
+  }
+  if (path === "/edge/recordings" && req.method === "DELETE") {
+    await env.DB.prepare(
+      "UPDATE recordings SET status='deleting',attempts=0 WHERE status NOT IN ('deleted','deleting')",
+    ).run();
+    ctx.waitUntil(recordingTasks(env));
+    return json({ ok: true });
+  }
   if (path.startsWith("/edge/totp/"))
     return json(
       await totpAPI(
@@ -62,10 +78,10 @@ async function edgeAPI(
       config(env),
       online(env),
       env.DB.prepare(
-        "SELECT id,kind,payload,status,created,updated,result FROM jobs ORDER BY created DESC LIMIT 30",
+        "SELECT id,kind,payload,status,created,updated,result FROM jobs WHERE hidden=0 ORDER BY created DESC LIMIT 30",
       ).all(),
       env.DB.prepare(
-        "SELECT id,kind,payload,created,notified,attempts,last_error AS result FROM events WHERE kind='sms.received' ORDER BY created DESC LIMIT 30",
+        "SELECT id,kind,payload,created,notified,attempts,last_error AS result FROM events WHERE kind='sms.received' AND hidden=0 ORDER BY created DESC LIMIT 30",
       ).all(),
     ]);
     return json({
@@ -75,10 +91,11 @@ async function edgeAPI(
       events: events.results,
     });
   }
-  if (path === "/edge/settings" && req.method === "PUT")
-    return json(
-      publicConfig(await updateConfig(env, await config(env), await body(req))),
-    );
+  if (path === "/edge/settings" && req.method === "PUT") {
+    const updated = await updateConfig(env, await config(env), await body(req));
+    ctx.waitUntil(wakeEdge(env));
+    return json(publicConfig(updated));
+  }
   if (path === "/edge/notify-test" && req.method === "POST") {
     const id = "test-" + crypto.randomUUID();
     await event(env, id, "system.test", {});
@@ -113,6 +130,7 @@ async function edgeAPI(
       sipRegistered: v.sipRegistered === true,
       busy: v.busy === true,
       version: String(v.version || ""),
+      heartbeatSeconds: v.heartbeatSeconds === 30 ? 30 : 5,
     };
     await env.DB.prepare(
       "INSERT INTO edge(id,value,updated) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value,updated=excluded.updated",
@@ -121,7 +139,10 @@ async function edgeAPI(
       .run();
     const c = await config(env);
     return json({
-      job: status.modemConnected ? await claimSMS(env) : null,
+      job:
+        status.modemConnected && v.claimJobs !== false
+          ? await claimSMS(env)
+          : null,
       sip: { domain: c.sipDomain, user: c.sipUser, password: c.sipPassword },
       inboundEnabled: c.inboundEnabled,
       outboundEnabled: c.outboundEnabled,

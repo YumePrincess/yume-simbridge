@@ -80,11 +80,26 @@ func getDevices() -> [(id: AudioDeviceID, name: String)] {
     return result
 }
 
+func deviceUID(_ id: AudioDeviceID) -> String? {
+    var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceUID,
+        mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    var value: Unmanaged<CFString>?
+    var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+    guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else { return nil }
+    return value?.takeUnretainedValue() as String?
+}
 func findDevice(matching needle: String) -> AudioDeviceID? {
-    for (id, name) in getDevices() where name.localizedCaseInsensitiveContains(needle) {
-        return id
+    let selected = ProcessInfo.processInfo.environment["SIMHUB_MODULE_LOCATION"].flatMap(UInt32.init)
+    let matches = getDevices().filter { device in
+        guard device.name.localizedCaseInsensitiveContains(needle) else { return false }
+        guard let selected else { return true }
+        guard let uid = deviceUID(device.id), uid.hasPrefix("AppleUSBAudioEngine:"),
+            let location = uid.split(separator: ":").dropLast().last,
+            let actual = UInt32(location, radix: 16) else { return false }
+        return actual == selected
     }
-    return nil
+    // Same-named AC/AS interfaces must never select another dongle's audio.
+    return matches.count == 1 ? matches[0].id : nil
 }
 
 func defaultDevice(_ scope: AudioObjectPropertyScope) -> AudioDeviceID? {

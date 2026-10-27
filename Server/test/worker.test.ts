@@ -22,6 +22,9 @@ class DB {
     this.db.exec(readFileSync("migrations/0004_totp.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0005_forward_screen.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0006_deferred_answer.sql", "utf8"));
+    this.db.exec(
+      readFileSync("migrations/0007_history_visibility.sql", "utf8"),
+    );
   }
   prepare(sql: string) {
     const stmt = this.db.prepare(sql);
@@ -54,6 +57,7 @@ beforeEach(async () => {
   });
   db = new DB();
   env = {
+    WAKE_HUB: { getByName: () => ({ wake: async () => {} }) },
     DB: db,
     MASTER_KEY: randomBytes(32).toString("base64"),
     RECORDING_KEY: randomBytes(32).toString("base64"),
@@ -1157,5 +1161,153 @@ describe("deferred SIM pickup and cancellation", () => {
       (await edge("/edge/settings", { incomingAnswerMode: "invalid" }, "PUT"))
         .status,
     ).toBe(400);
+  });
+});
+
+describe("low-request push and history management", () => {
+  it("uses 30-second heartbeat freshness without extending legacy clients", async () => {
+    await edge("/edge/sync", {
+      modemConnected: true,
+      voiceReady: true,
+      sipRegistered: true,
+      heartbeatSeconds: 30,
+      claimJobs: false,
+    });
+    db.db.exec("UPDATE edge SET updated=updated-40000");
+    let state = (await (await edge("/edge/state")).json()) as {
+      edge: { online: boolean };
+    };
+    expect(state.edge.online).toBe(true);
+    db.db.exec("UPDATE edge SET updated=updated-51000");
+    state = (await (await edge("/edge/state")).json()) as typeof state;
+    expect(state.edge.online).toBe(false);
+  });
+  it("notifies the edge on SMS enqueue and separates heartbeat from queue claims", async () => {
+    const wake = vi.fn(async () => {});
+    env.WAKE_HUB = {
+      getByName: () => ({ wake }),
+    } as unknown as Env["WAKE_HUB"];
+    const { enqueue } = await import("../src/store");
+    await enqueue(env, "mail-fixture", "sms", { to: "12345", body: "hello" });
+    expect(wake).toHaveBeenCalledOnce();
+    const pulse = (await (
+      await edge("/edge/sync", { modemConnected: true, claimJobs: false })
+    ).json()) as { job: unknown };
+    expect(pulse.job).toBeNull();
+    const claimed = (await (
+      await edge("/edge/sync", { modemConnected: true, claimJobs: true })
+    ).json()) as { job: { id: string } };
+    expect(claimed.job.id).toBe("mail-fixture");
+  });
+  it("keeps a queued task durable when the notification service is unavailable", async () => {
+    env.WAKE_HUB = {
+      getByName: () => ({
+        wake: async () => {
+          throw Error("offline");
+        },
+      }),
+    } as unknown as Env["WAKE_HUB"];
+    const { enqueue } = await import("../src/store");
+    await enqueue(env, "offline-fixture", "sms", {
+      to: "12345",
+      body: "hello",
+    });
+    expect(
+      (
+        (await db
+          .prepare("SELECT status FROM jobs WHERE id='offline-fixture'")
+          .first()) as { status: string }
+      ).status,
+    ).toBe("queued");
+  });
+  it("hides individual and all history rows while preserving tasks and deduplication", async () => {
+    const { enqueue, event } = await import("../src/store");
+    for (const id of ["one", "two"]) {
+      await enqueue(env, id, "sms", { to: "12345", body: "private" });
+      await event(env, id, "sms.received", { from: "10086", body: "private" });
+    }
+    await event(env, "other", "call.incoming", {});
+    expect((await edge("/edge/history/sms/one", {}, "DELETE")).status).toBe(
+      200,
+    );
+    let state = (await (await edge("/edge/state")).json()) as {
+      events: { id: string }[];
+      jobs: { id: string }[];
+    };
+    expect(state.events.map((x) => x.id)).toEqual(["two"]);
+    await edge("/edge/history/sms", {}, "DELETE");
+    await edge("/edge/history/jobs", {}, "DELETE");
+    state = (await (await edge("/edge/state")).json()) as typeof state;
+    expect(state.events).toEqual([]);
+    expect(state.jobs).toEqual([]);
+    expect(
+      (
+        (await db
+          .prepare("SELECT count(*) AS n FROM jobs WHERE status='queued'")
+          .first()) as { n: number }
+      ).n,
+    ).toBe(2);
+    await enqueue(env, "one", "sms", { to: "12345", body: "replay" });
+    expect(
+      (
+        (await db.prepare("SELECT count(*) AS n FROM jobs").first()) as {
+          n: number;
+        }
+      ).n,
+    ).toBe(2);
+    expect(
+      (
+        (await db
+          .prepare("SELECT hidden FROM events WHERE id='other'")
+          .first()) as { hidden: number }
+      ).hidden,
+    ).toBe(0);
+  });
+  it("requires authentication before opening the wake socket or clearing history", async () => {
+    for (const path of [
+      "/edge/wake",
+      "/edge/history/jobs",
+      "/edge/recordings",
+    ]) {
+      const response = await worker.fetch!(
+        new Request(env.PUBLIC_ORIGIN + path, {
+          method: path.endsWith("wake") ? "GET" : "DELETE",
+        }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(401);
+    }
+  });
+  it("bulk-deletes recordings beyond the displayed page through the existing deletion queue", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+    env.RECORDINGS = { delete: vi.fn(async () => {}) } as unknown as R2Bucket;
+    for (let i = 0; i < 2; i++) {
+      const recording = "RE" + String(i + 1).repeat(32);
+      await db
+        .prepare(
+          "INSERT INTO recordings(sid,value,status,updated) VALUES(?,?,'archived',?)",
+        )
+        .bind(
+          recording,
+          JSON.stringify({
+            sid: recording,
+            key: "simhub/recordings/test/" + i,
+          }),
+          Date.now(),
+        )
+        .run();
+    }
+    expect((await edge("/edge/recordings", {}, "DELETE")).status).toBe(200);
+    await Promise.all(pending);
+    expect(
+      (
+        (await db
+          .prepare(
+            "SELECT count(*) AS n FROM recordings WHERE status='deleted'",
+          )
+          .first()) as { n: number }
+      ).n,
+    ).toBe(2);
   });
 });
