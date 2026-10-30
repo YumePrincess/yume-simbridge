@@ -1,0 +1,91 @@
+Yume SIM Hub / GL.iNet BE6500 feasibility — 2026-10-30
+
+Status: feasible development target, not a working LuCI gateway release.
+
+Read-only SSH observations
+- GL-BE6500, GL firmware 4.9.0, OpenWrt 23.05-SNAPSHOT r0-3601c2a49.
+- Kernel 5.4.213; aarch64; opkg architecture aarch64_cortex-a53_neon-vfpv4.
+- MemTotal 873732 kB, approximately 403176 kB available during inspection.
+- Overlay approximately 276 MiB free. LuCI and libusb present, Python and adb
+  executables absent. USB serial option/wwan kernel modules installed.
+- After reinsertion: USB 2ca3:4006, manufacturer BAIWANG, product Baiwang.
+- Interfaces 0–4 vendor-specific; interface 5 ff/42/01 (ADB);
+  interfaces 6–8 USB audio control/streaming. No bound interface drivers,
+  ttyUSB nodes or sound devices observed. No module commands were executed.
+- Existing Go core successfully cross-compiled using GOOS=linux GOARCH=arm64
+  CGO_ENABLED=0 go build ./cmd/simhub-edge. This validates compilation only.
+
+Reusable components and gaps
+- Server/src/config.ts already stores encrypted shared business settings in D1.
+  Preserve this as canonical configuration, including SIP, forwarding, Gotify,
+  email, service language and authentication. Never copy telephone secrets into
+  public LuCI assets or ordinary UCI output.
+- Server/src/index.ts currently overwrites edge row id=1 on every sync and can
+  return jobs/SIP credentials to both clients. It does NOT enforce exclusivity.
+- Mac/tools/adb_server.py uses macOS IORegistry location matching. Implement Linux
+  sysfs physical-device matching; do not select the first ADB device globally.
+- Mac/tools/voice_audio_bridge.swift uses CoreAudio. A Linux ALSA or libusb audio
+  adapter must preserve the existing raw PCM FIFO contract and health checks.
+- Mac/supervisor.py launches that macOS bridge unconditionally; add an explicit
+  platform backend. Do not copy the signed macOS runtime onto the router.
+- Obtain packages/SDK matching GL firmware exactly. Generic OpenWrt kernel modules
+  must not be assumed ABI-compatible with this vendor kernel.
+
+Proposed database and exclusivity design (not yet implemented)
+- devices: random persistent device ID, platform, label, separately revocable
+  hashed device credential, enabled flag, lastSeen, capabilities.
+- device_settings: per-device hardware identity and preference, configuration
+  revision. Display language remains independent of cloud service language.
+  USB bus/location is machine-specific; store separate selections per device.
+- runtime_lease: one singleton row with owner, monotonically increasing epoch,
+  expiry and desired owner. Acquire/renew by conditional atomic SQL using server
+  time; concurrent Mac/OpenWrt requests must yield exactly one owner.
+- All execution endpoints, job claims/results, call events and wake connections
+  validate authenticated owner + epoch. Reject stale generations; heartbeat
+  visibility alone is not ownership. Bind job claims to owner and epoch.
+- Client must acquire before touching module/SIP registration, renew while active,
+  and stop SIP, AT consumption, audio and module helper on expiry or rejection.
+  Use a local monotonic deadline and conservative expiry margin; terminate owned
+  child processes if supervision or renewal fails. Never run offline indefinitely.
+- Explicit switch: drain active call/job, stop and acknowledge old runtime, release,
+  acquire on target, fetch canonical config then start. Refuse normal switch during
+  a call. For unresponsive owner, wait for expiry and bounded shutdown grace before
+  granting next epoch. Old unmodified Mac builds must be denied execution by the
+  server once leases are enabled; ship both client support and enforcement together.
+- Database fencing cannot by itself stop an old client talking directly to SIP or
+  modem. Strict exclusivity requires verified client shutdown behavior and, if
+  multiple modems exist, per-owner upstream credentials or server-controlled routing.
+- Local cache/spool is for retry and deduplication, never independent business
+  configuration. Preserve original SMS content/numbers. Unknown send outcome must
+  remain unknown rather than automatically resend after device migration.
+
+LuCI and 24-hour service design
+- luci-app-yume-simhub: status, active-device selection, shared configuration,
+  device pairing/revocation and diagnostics. Thin UI calling narrowly scoped rpcd
+  methods; no arbitrary shell execution grants. Client credential root-readable
+  only, excluded from exports/logs; pair each device once.
+- yume-simhub service: Linux ARM64 core, minimal module/PCM adapters, procd startup,
+  bounded restart/backoff, USB hotplug recovery, cloud reconnect and lease watchdog.
+- Keep high-volume logs/health in /tmp with caps; durable spool/config protected
+  under a dedicated router data directory. Rate-limit flash writes and bound disk
+  use. Keep Mac credentials under its existing Application Support directory.
+- Do not change default route, WAN, USB network mode or router firewall merely to
+  enable telephony. Router management access must survive module failures.
+
+Implementation/acceptance sequence
+1. Targeted USB interface binding and matching firmware sound/ADB dependencies;
+   verify read-only AT identity and ALSA full-duplex 8 kHz PCM compatibility.
+2. Cloud lease protocol + tests for simultaneous acquisition, stale renew/results,
+   reboot, network partition and safe legacy rejection; update Mac runtime.
+3. Linux adapters and procd service; use current database settings and event IDs.
+4. LuCI packaging with device enrollment and graceful switch in both clients.
+5. Real inbound/outbound SMS, email, Gotify, SIP calls and two-way audio tests;
+   unplug/replug, reboot, network outage, switch during call, stale job tests.
+6. At least 24 hours soak: bounded memory/flash, audio latency, renewal recovery,
+   no duplicate SMS and no overlapping SIP/module ownership. A short diagnostic
+   session cannot establish 24-hour reliability.
+
+Official references
+https://openwrt.org/docs/guide-developer/procd-init-scripts
+https://git.openwrt.org/project/procd/tree/README.md
+https://github.com/openwrt/luci
