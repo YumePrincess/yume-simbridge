@@ -31,7 +31,7 @@ postinst='''#!/bin/sh
 mkdir -p /etc/yume-simhub
 chmod 700 /etc/yume-simhub
 rm -f /tmp/luci-indexcache
-/etc/init.d/rpcd restart
+/usr/lib/yume-simhub/reload-rpcd.sh
 if [ "$(uci -q get yume-simhub.main.enabled)" = 1 ]; then
  /etc/init.d/yume-simhub enable
  /etc/init.d/yume-simhub start

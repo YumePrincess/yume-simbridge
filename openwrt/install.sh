@@ -16,6 +16,6 @@ cp root/etc/init.d/yume-simhub /etc/init.d/yume-simhub
 [ -f /etc/config/yume-simhub ] || cp root/etc/config/yume-simhub /etc/config/yume-simhub
 chmod 755 /etc/init.d/yume-simhub /usr/libexec/rpcd/yume-simhub
 rm -f /tmp/luci-indexcache
-/etc/init.d/rpcd restart
+/usr/lib/yume-simhub/reload-rpcd.sh
 /etc/init.d/yume-simhub start
 echo 'Installed. Open LuCI → Services → Yume SIM Hub to pair and enable.'
