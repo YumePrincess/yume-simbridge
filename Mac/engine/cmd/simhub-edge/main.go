@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27029"
+var Build = "27030"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -146,17 +146,23 @@ func main() {
 		fatal(err)
 	}
 	defer ua.Close()
-	e.dg = diago.NewDiago(ua, diago.WithTransport(diago.Transport{Transport: "udp", BindHost: "0.0.0.0", BindPort: 15060, RewriteContact: true}), diago.WithMediaConfig(diago.MediaConfig{Codecs: []media.Codec{media.CodecAudioUlaw, media.CodecAudioAlaw, media.CodecTelephoneEvent8000}}))
-	go func() {
-		if err := e.dg.Serve(ctx, e.outgoing); err != nil && !errors.Is(err, context.Canceled) {
-			slog.Error("SIP listener stopped", "error", err)
-			cancel()
-		}
-	}()
+	sipClient, err := sipgo.NewClient(ua, sipgo.WithClientNAT(), sipgo.WithClientConnectionAddr("0.0.0.0:15060"))
+	if err != nil {
+		fatal(err)
+	}
+	e.dg = diago.NewDiago(ua, diago.WithClient(sipClient), diago.WithTransport(diago.Transport{Transport: "udp4", BindHost: "0.0.0.0", BindPort: 15060, RewriteContact: true}), diago.WithMediaConfig(diago.MediaConfig{Codecs: []media.Codec{media.CodecAudioUlaw, media.CodecAudioAlaw, media.CodecTelephoneEvent8000}}))
+	// Keep the UDP listener alive until the owned registration is removed.
+	serveCtx, stopServing := context.WithCancel(context.Background())
+	defer stopServing()
+	if err := e.dg.ServeBackground(serveCtx, e.outgoing); err != nil {
+		fatal(err)
+	}
 	go e.cloudWakeLoop(ctx)
 	go e.voiceRecoveryLoop(ctx)
 	go e.modemEvents(ctx)
-	go e.registerLoop(ctx)
+	registrationDone := make(chan struct{})
+	go func() { defer close(registrationDone); e.registerLoop(ctx) }()
+	defer func() { <-registrationDone }()
 	go e.inboxLoop(ctx)
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -390,62 +396,6 @@ func (e *engine) uploadMessages(ctx context.Context) {
 	}
 }
 func (e *engine) getSIP() sipConfig { e.sipMu.RLock(); defer e.sipMu.RUnlock(); return e.sip }
-func (e *engine) registerLoop(ctx context.Context) {
-	for {
-		c := e.getSIP()
-		if c.Domain != "" && c.Password != "" {
-			var uri sip.Uri
-			err := sip.ParseUri("sip:"+c.User+"@"+c.Domain, &uri)
-			if err == nil {
-				// Re-register on the same socket so the registrar can address its NAT mapping.
-				regCtx, cancel := context.WithCancel(ctx)
-				go func() {
-					t := time.NewTicker(5 * time.Second)
-					defer t.Stop()
-					for {
-						select {
-						case <-regCtx.Done():
-							return
-						case <-t.C:
-							if e.getSIP() != c {
-								cancel()
-								return
-							}
-						}
-					}
-				}()
-				tr, err := e.dg.RegisterTransaction(regCtx, uri, diago.RegisterOptions{Username: c.User, Password: c.Password, Expiry: 3600 * time.Second})
-				if err == nil {
-					err = tr.Register(regCtx)
-					if err == nil {
-						e.registered.Store(true)
-						slog.Info("Twilio SIP registered")
-						for err == nil {
-							select {
-							case <-regCtx.Done():
-								err = regCtx.Err()
-							case <-time.After(30 * time.Second):
-								checkCtx, done := context.WithTimeout(regCtx, 8*time.Second)
-								err = tr.Register(checkCtx)
-								done()
-							}
-						}
-					}
-				}
-				e.registered.Store(false)
-				cancel()
-				if err != nil && !errors.Is(err, context.Canceled) {
-					slog.Warn("SIP registration failed", "error", err)
-				}
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(10 * time.Second):
-		}
-	}
-}
 func (e *engine) setCall(id modem.CallID, cancel context.CancelFunc) {
 	e.callMu.Lock()
 	e.callID = id
