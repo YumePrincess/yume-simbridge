@@ -449,7 +449,7 @@ func OpenSerial(ctx context.Context, path string, baud int) (*Client, error) {
 	// Some USB serial interfaces block during open while the modem driver is
 	// being re-enumerated. O_NONBLOCK makes automatic discovery and all later
 	// reads bounded; readWithContext handles EAGAIN without busy spinning.
-	file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NONBLOCK, 0)
+	file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NONBLOCK|syscall.O_NOCTTY, 0)
 	if err != nil {
 		return nil, fmt.Errorf("open serial port %s: %w", path, err)
 	}

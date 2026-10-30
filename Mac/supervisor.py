@@ -46,13 +46,18 @@ def stop(*_):
     global stopping
     if stopping: return
     stopping=True
+    deadline=time.monotonic()+10
+    # The engine owns SIP cleanup. Keep its audio/FIFOs and AT PTY alive until
+    # it exits; closing a controlling PTY first can deliver SIGHUP on Linux.
     for child in reversed(children):
         if child.poll() is None:
-            os.killpg(child.pid,signal.SIGTERM)
-    deadline=time.monotonic()+10
-    for child in reversed(children):
+            try: os.killpg(child.pid,signal.SIGTERM)
+            except ProcessLookupError: pass
         try: child.wait(max(.1,deadline-time.monotonic()))
-        except subprocess.TimeoutExpired: os.killpg(child.pid,signal.SIGKILL); child.wait()
+        except subprocess.TimeoutExpired:
+            try: os.killpg(child.pid,signal.SIGKILL)
+            except ProcessLookupError: pass
+            child.wait()
     # Inspect the actual owned module helper before releasing ownership.
     if 'voice_runtime' in globals():
         try: voice_runtime.stop_voice_route()
