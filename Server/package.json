@@ -24,7 +24,7 @@
     "vitest": "latest",
     "wrangler": "latest"
   },
-  "build": 27028,
+  "build": 27029,
   "overrides": {
     "undici": "^7.30.1"
   }

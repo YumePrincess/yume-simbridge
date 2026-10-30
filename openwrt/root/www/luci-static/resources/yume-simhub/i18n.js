@@ -181,7 +181,10 @@ var dictionaries={
     "Open downloads": "打开下载页",
     "Open package manager": "打开软件包管理",
     "About": "关于",
-    "Answer after confirmation (default)": "目标方确认后接听（默认）"
+    "Answer after confirmation (default)": "目标方确认后接听（默认）",
+    "Navigation": "页面导航",
+    "Delivered": "已推送",
+    "Pending": "待推送"
   },
   "zh-Hant": {
     "Communication": "通訊",
@@ -363,7 +366,10 @@ var dictionaries={
     "Open downloads": "開啟下載頁",
     "Open package manager": "開啟套件管理",
     "About": "關於",
-    "Answer after confirmation (default)": "目標方確認後接聽（預設）"
+    "Answer after confirmation (default)": "目標方確認後接聽（預設）",
+    "Navigation": "頁面導覽",
+    "Delivered": "已推送",
+    "Pending": "待推送"
   },
   "ja": {
     "Communication": "通信",
@@ -545,7 +551,10 @@ var dictionaries={
     "Open downloads": "ダウンロードを開く",
     "Open package manager": "パッケージ管理を開く",
     "About": "このアプリについて",
-    "Answer after confirmation (default)": "相手の確認後に応答（既定）"
+    "Answer after confirmation (default)": "相手の確認後に応答（既定）",
+    "Navigation": "ページの選択",
+    "Delivered": "通知済み",
+    "Pending": "通知待ち"
   },
   "fr": {
     "Communication": "Communication",
@@ -727,7 +736,10 @@ var dictionaries={
     "Open downloads": "Ouvrir les téléchargements",
     "Open package manager": "Ouvrir le gestionnaire de paquets",
     "About": "À propos",
-    "Answer after confirmation (default)": "Répondre après confirmation (par défaut)"
+    "Answer after confirmation (default)": "Répondre après confirmation (par défaut)",
+    "Navigation": "Navigation",
+    "Delivered": "Notifié",
+    "Pending": "En attente"
   }
 };
 return baseclass.extend({translate:function(lang,key){return (dictionaries[lang]||{})[key]||key;}});

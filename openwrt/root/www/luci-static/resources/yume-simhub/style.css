@@ -26,3 +26,86 @@
 
 #yumehub .yh-player{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);width:calc(100% - 48px);max-width:740px;z-index:1500;margin:0}
 #yumehub a.yh-button{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;min-height:34px;border:1px solid var(--line);background:var(--panel);color:var(--accent);border-radius:9px;text-decoration:none;font-size:12px}
+
+/* Layout follows the app's available width, including embedded LuCI columns. */
+#yumehub{width:100%;max-width:100%;min-width:0;container: yh-app / inline-size}
+#yumehub .yh-shell,#yumehub .yh-sidebar,#yumehub .yh-nav,#yumehub .yh-content,#yumehub .yh-toolbar>div{min-width:0;max-width:100%}
+#yumehub .yh-main{container: yh-main / inline-size}
+#yumehub .yh-mobile-nav{display:none}
+#yumehub .yh-toolbar{flex-wrap:wrap}
+#yumehub .yh-card>.yh-button,#yumehub .yh-card>.yh-actions{margin-top:16px}
+#yumehub .yh-savebar{margin-top:16px;flex-wrap:wrap}
+#yumehub .yh-value-row{gap:12px}
+#yumehub .yh-tag{white-space:nowrap;flex-shrink:0}
+#yumehub .yh-record-list{margin:-4px 0}
+#yumehub .yh-record{display:flex;align-items:flex-start;gap:14px;padding:20px 0;border-bottom:1px solid var(--line);min-width:0}
+#yumehub .yh-record:last-child{border-bottom:0}
+#yumehub .yh-record-body{flex:1;min-width:0}
+#yumehub .yh-record-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#yumehub .yh-record-number{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:normal;word-break:normal;white-space:nowrap;max-width:100%;overflow:auto}
+#yumehub .yh-record-icon{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;background:var(--soft);color:var(--accent);border-radius:10px}
+#yumehub .yh-message{font-size:14px;line-height:1.65;max-width:none;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:8px}
+#yumehub .yh-record-route{font-size:12px;color:var(--muted);margin-top:6px}
+#yumehub .yh-record-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted);margin-top:8px;overflow-wrap:anywhere}
+#yumehub .yh-record-meta time{white-space:nowrap}
+#yumehub .yh-record-actions{display:flex;gap:4px;align-items:center;flex-shrink:0}
+#yumehub button.yh-icon-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:36px;min-width:36px;height:36px;min-height:36px;padding:8px;border:0;border-radius:9px;background:transparent;color:var(--accent);box-shadow:none;cursor:pointer}
+#yumehub button.yh-icon-button:hover{background:var(--soft)}
+#yumehub button.yh-play{width:42px;height:42px;min-width:42px;min-height:42px;border-radius:50%;border:1px solid var(--line);background:var(--bg)}
+#yumehub .yh-play svg{width:17px;height:17px}
+#yumehub .yh-more-wrap{flex-shrink:0}
+#yumehub .yh-menu{position:fixed;inset:auto;margin:0;width:220px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:0 8px 32px #0003}
+#yumehub .yh-menu::backdrop{background:transparent}
+#yumehub .yh-menu .yh-button{display:flex;width:100%;justify-content:flex-start;min-height:40px;text-align:left;border:0;box-shadow:none;background:transparent}
+#yumehub .yh-menu .yh-button:hover{background:var(--soft)}
+#yumehub .yh-list-tools input{min-width:0}
+#yumehub .yh-list-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:18px;border-top:1px solid var(--line);margin-top:8px}
+#yumehub .yh-record>.yh-check{flex-shrink:0;margin-top:10px}
+@container yh-app (max-width:800px){
+ #yumehub .yh-shell{grid-template-columns:minmax(0,1fr)}
+ #yumehub .yh-sidebar{padding:16px;border-right:0;border-bottom:1px solid var(--line)}
+ #yumehub .yh-brand{padding:0 0 14px}
+ #yumehub .yh-nav,#yumehub .yh-sidefoot{display:none}
+ #yumehub .yh-mobile-nav{display:block;min-height:44px}
+ #yumehub .yh-main{padding:20px}
+}
+@container yh-main (max-width:600px){
+ #yumehub .yh-grid{grid-template-columns:minmax(0,1fr)}
+ #yumehub .yh-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #yumehub .yh-toolbar{gap:16px;margin-bottom:22px}
+ #yumehub .yh-route-row{grid-template-columns:minmax(0,1fr) auto;gap:7px}
+ #yumehub .yh-route-row>span:nth-child(2){display:none}
+ #yumehub .yh-route-row>strong{grid-row:2}
+ #yumehub .yh-route-row>.yh-tag{grid-column:2;grid-row:1/3}
+ #yumehub .yh-row{grid-template-columns:minmax(0,1fr);gap:8px}
+ #yumehub .yh-row label{padding:0}
+ #yumehub .yh-overview-intro h2{font-size:24px}
+ #yumehub .yh-record{gap:10px}
+ #yumehub .yh-record-heading{gap:6px}
+ #yumehub .yh-record-actions{flex-direction:column;gap:2px}
+ #yumehub button.yh-icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
+ #yumehub button.yh-button,#yumehub a.yh-button{min-height:40px}
+ #yumehub input:not([type=checkbox]),#yumehub select{min-height:44px;font-size:16px}
+ #yumehub .yh-card{padding:17px}
+}
+@container yh-app (max-width:420px){
+ #yumehub .yh-main{padding:14px}
+ #yumehub .yh-toolbar{flex-direction:column;align-items:stretch}
+ #yumehub .yh-toolbar>.yh-actions{justify-content:flex-end}
+ #yumehub .yh-record{gap:8px;flex-wrap:nowrap}
+ #yumehub .yh-record-body{flex-basis:0}
+ #yumehub .yh-record-actions{flex-direction:column;margin:0}
+ #yumehub .yh-record-heading{flex-direction:row;align-items:baseline}
+ #yumehub .yh-overview-intro{gap:12px}
+ #yumehub .yh-overview-intro>svg{width:46px;height:46px;padding:10px}
+ #yumehub .yh-player{width:calc(100% - 20px);bottom:10px;gap:8px;padding:10px;flex-wrap:wrap}
+ #yumehub .yh-player audio{width:100%;order:3}
+}
+@container yh-app (max-width:420px){
+ #yumehub .yh-record>.yh-check{order:0;margin-top:10px}
+ #yumehub .yh-record:has(>.yh-check){flex-wrap:wrap}
+ #yumehub .yh-record:has(>.yh-check) .yh-record-body{flex-basis:calc(100% - 96px)}
+ #yumehub .yh-record:has(>.yh-check) .yh-record-actions{flex-direction:row;margin-left:auto}
+}
+
+#yumehub .yh-more svg{stroke-width:2.5}
