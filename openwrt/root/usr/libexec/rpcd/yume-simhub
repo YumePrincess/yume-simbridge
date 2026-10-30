@@ -1,0 +1,76 @@
+#!/usr/bin/python3 -sB
+"""Narrow rpcd interface. No shell commands or caller-controlled cloud paths."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import urllib.request
+import urllib.error
+sys.dont_write_bytecode=True
+os.umask(0o077)
+BASE=Path('/etc/yume-simhub')
+BOOT=BASE/'bootstrap.json'
+METHODS={'status':{},'configure':{'token':'','enabled':True},'settings':{},'save_settings':{'settings':{}},'switch':{'device':''},'service':{'action':''}}
+
+def cloud(path, body=None, method=None):
+    cfg=json.loads(BOOT.read_text())
+    req=urllib.request.Request('https://worker.example.com'+path,data=json.dumps(body).encode() if body is not None else None,
+        method=method,headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json'})
+    with urllib.request.urlopen(req,timeout=8) as response:
+        return json.loads(response.read(262144))
+
+def service(action):
+    if action not in ('start','stop','restart','enable','disable'):raise ValueError('Invalid service action')
+    subprocess.run(['/etc/init.d/yume-simhub',action],check=True,timeout=30,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+
+def execute(method, v):
+    if method=='configure':
+        BASE.mkdir(mode=0o700,parents=True,exist_ok=True);os.chmod(BASE,0o700)
+        cfg=json.loads(BOOT.read_text()) if BOOT.exists() else {'origin':'https://worker.example.com'}
+        token=v.get('token','')
+        if token:
+            if not isinstance(token,str) or not 32<=len(token)<=512 or any(c.isspace() for c in token):raise ValueError('Invalid credential')
+            cfg['token']=token
+        if not cfg.get('token'):raise ValueError('Client credential required')
+        # Verify before replacing working credentials.
+        req=urllib.request.Request(cfg['origin']+'/edge/state',headers={'Authorization':'Bearer '+cfg['token']})
+        with urllib.request.urlopen(req,timeout=8) as response:response.read(262144)
+        temp=BOOT.with_suffix('.tmp');temp.write_text(json.dumps(cfg));os.chmod(temp,0o600);temp.replace(BOOT)
+        enabled=v.get('enabled')
+        if type(enabled) is not bool:raise ValueError('Invalid enabled setting')
+        subprocess.run(['/sbin/uci','set','yume-simhub.main.enabled='+('1' if enabled else '0')],check=True)
+        subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
+        service('enable' if enabled else 'disable');service('restart' if enabled else 'stop')
+        return {'ok':True}
+    if method=='status':
+        result={'configured':BOOT.exists(),'local':{},'runtime':{},'error':'','version':json.loads(Path('/usr/lib/yume-simhub/version.json').read_text())}
+        try:result['local']=json.loads(Path('/tmp/yume-simhub/edge-health.json').read_text())
+        except (OSError,ValueError):pass
+        if BOOT.exists():
+            try:result['runtime']=cloud('/edge/runtime/state')
+            except Exception:result['error']='Cloud runtime API unavailable; check connection and deployed server version'
+        identity=BASE/'device-id'
+        if identity.exists():result['device']=identity.read_text().strip()
+        return result
+    if method=='settings':return cloud('/edge/state')
+    if method=='save_settings':
+        value=v.get('settings')
+        if not isinstance(value,dict):raise ValueError('Invalid settings')
+        return cloud('/edge/settings',value,'PUT')
+    if method=='switch':return cloud('/edge/runtime/select',{'device':v.get('device')})
+    if method=='service':
+        service(v.get('action'));return {'ok':True}
+    raise ValueError('Unknown method')
+
+if __name__=='__main__':
+    if len(sys.argv)>1 and sys.argv[1]=='list':print(json.dumps(METHODS))
+    elif len(sys.argv)>2 and sys.argv[1]=='call':
+        try:
+            data=sys.stdin.buffer.read(16385)
+            if len(data)>16384:raise ValueError('Request too large')
+            print(json.dumps(execute(sys.argv[2],json.loads(data or b'{}'))))
+        except urllib.error.HTTPError as error:
+            print(json.dumps({'error':'Cloud request rejected (HTTP %s)'%error.code}))
+        except Exception:
+            print(json.dumps({'error':'Operation failed; verify settings, dependencies and service state'}))

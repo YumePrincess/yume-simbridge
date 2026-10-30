@@ -8,6 +8,7 @@ import {
   generateKeyPairSync,
 } from "node:crypto";
 import worker from "../src/index";
+import {runtimeAPI} from "../src/runtime-lease";
 import { defaults, saveConfig, hashPin, publicConfig } from "../src/config";
 import { cryptChunk } from "../src/recording-crypto";
 import { recordingTasks, recordingCallback } from "../src/recordings";
@@ -17,6 +18,7 @@ class DB {
   db = new DatabaseSync(":memory:");
   constructor() {
     this.db.exec(readFileSync("migrations/0001.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0008_runtime_lease.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0002_recordings.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0003_notifications.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0004_totp.sql", "utf8"));
@@ -72,6 +74,7 @@ beforeEach(async () => {
   ctx = {
     waitUntil: (p: Promise<unknown>) => pending.push(p),
   } as unknown as ExecutionContext;
+  await runtimeAPI(env,"/edge/runtime/acquire",{device:"test-macos-device-0001",session:"test-session-id-00001",platform:"macos"});
   await saveConfig(env, {
     ...defaults,
     twilioToken: "test-token",
@@ -119,6 +122,9 @@ async function edge(
       method,
       headers: {
         Authorization: "Bearer " + env.EDGE_TOKEN,
+        "X-SimHub-Device":"test-macos-device-0001",
+        "X-SimHub-Session":"test-session-id-00001",
+        "X-SimHub-Epoch":"1",
         "Content-Type": "application/json",
       },
       body: data ? JSON.stringify(data) : undefined,
@@ -1310,4 +1316,41 @@ describe("low-request push and history management", () => {
       ).n,
     ).toBe(2);
   });
+});
+
+describe("exclusive runtime ownership", () => {
+ const router={device:"test-openwrt-device-01",session:"test-router-session-01",platform:"openwrt"};
+ it("rejects legacy clients before overwriting health or claiming jobs", async()=>{
+  const response=await worker.fetch!(new Request(env.PUBLIC_ORIGIN+"/edge/sync",{method:"POST",headers:{Authorization:"Bearer "+env.EDGE_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({modemConnected:true})}),env,ctx);
+  expect(response.status).toBe(409);
+  expect(db.db.prepare("SELECT * FROM edge").get()).toBeUndefined();
+ });
+ it("allows exactly one competing acquisition and fences old epochs",async()=>{
+  db.db.exec("UPDATE runtime_lease SET expires=0");
+  const attempts=await Promise.allSettled([
+   runtimeAPI(env,"/edge/runtime/acquire",router),
+   runtimeAPI(env,"/edge/runtime/acquire",{...router,device:"another-router-device",session:"another-router-session"})
+  ]);
+  expect(attempts.filter(v=>v.status==="fulfilled")).toHaveLength(1);
+  expect((await edge("/edge/sync",{modemConnected:true})).status).toBe(409);
+ });
+ it("requires release grace and rejects renewals after selection changes",async()=>{
+  await expect(runtimeAPI(env,"/edge/runtime/acquire",router)).rejects.toThrow();
+  await runtimeAPI(env,"/edge/runtime/select",{device:router.device});
+  await expect(runtimeAPI(env,"/edge/runtime/renew",{device:"test-macos-device-0001",session:"test-session-id-00001",epoch:1})).rejects.toThrow();
+  await runtimeAPI(env,"/edge/runtime/release",{device:"test-macos-device-0001",session:"test-session-id-00001",epoch:1});
+  await expect(runtimeAPI(env,"/edge/runtime/acquire",router)).rejects.toThrow();
+  db.db.exec("UPDATE runtime_lease SET expires=expires-16000");
+  const next=await runtimeAPI(env,"/edge/runtime/acquire",router);
+  expect(next).toMatchObject({epoch:2});
+ });
+ it("refuses switching during an active call",async()=>{
+  await edge("/edge/sync",{modemConnected:true,busy:true});
+  await expect(runtimeAPI(env,"/edge/runtime/acquire",router)).rejects.toThrow();
+  await expect(runtimeAPI(env,"/edge/runtime/select",{device:router.device})).rejects.toThrow(/active call/);
+ });
+ it("never leaks session secrets in the management state",async()=>{
+  const response=await edge("/edge/runtime/state");
+  expect(await response.text()).not.toContain("test-session-id-00001");
+ });
 });

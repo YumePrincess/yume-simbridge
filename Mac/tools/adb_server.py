@@ -1,7 +1,6 @@
 """Module-only access to an already running local ADB server; never starts/kills it."""
 import module_select
 import os
-import plistlib
 import re
 import socket
 import struct
@@ -11,6 +10,21 @@ import time
 class ServerError(RuntimeError): pass
 
 def module_paths(vendor, product):
+    if os.uname().sysname == 'Linux':
+        from pathlib import Path
+        found = set()
+        for path in Path('/sys/bus/usb/devices').glob('*'):
+            try:
+                if int((path/'idVendor').read_text(),16)!=vendor or int((path/'idProduct').read_text(),16)!=product: continue
+                bus, ports = path.name.split('-',1)
+                location = int(bus)<<24
+                for index, port in enumerate(ports.split('.')):
+                    if index>=6 or not 0<int(port)<16: raise ValueError('Unsupported topology')
+                    location |= int(port) << (20-4*index)
+                if module_select.selected_location() in (None,location): found.add(path.name)
+            except (OSError,ValueError): continue
+        return found
+    import plistlib
     # Native macOS ADB reports IORegistry's USB locationID, e.g. 137560064X.
     raw = subprocess.check_output(['/usr/sbin/ioreg', '-a', '-r', '-c', 'IOUSBHostDevice'], timeout=4)
     found = set()

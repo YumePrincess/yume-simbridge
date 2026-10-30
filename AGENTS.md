@@ -20,3 +20,5 @@
 - Release Apps must be self-contained: bundled Python, pyusb, libusb and CA certificates. Installed runtime code must never depend on the source checkout, Homebrew or a venv on another disk.
 - Preserve the persistent local signing identity under Application Support/YumeSimHub/Signing for developer builds. Its private build-only keychain is never opened by the running App or in-app updater; do not add it to the user's keychain search list or trust roots.
 - App updates install a user-selected signed ZIP and require a newer Build plus the current certificate requirement. Publish both the first-install DMG and update ZIP with SHA-256 checksums.
+
+- OpenWrt LuCI、路由器运行时、Mac App 与云端共用根目录 `version.json` 的营销版本和 Build，不维护独立版本序列。

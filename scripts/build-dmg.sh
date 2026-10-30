@@ -72,3 +72,5 @@ cp -X "${WORK_ROOT}/update.zip" "${ZIP_STAGING}"
 mv -f "${ZIP_STAGING}" "${ZIP_IMAGE}"
 echo "Built ${FINAL_IMAGE}"
 echo "Built ${ZIP_IMAGE}"
+
+(cd "${DIST_ROOT}" && shasum -a 256 "${RELEASE_LABEL}.dmg" "${RELEASE_LABEL}.zip" > SHA256SUMS.txt)

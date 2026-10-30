@@ -43,7 +43,7 @@ cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon-$BUILD.icns"
 cp MacApp/SimHubLogo.png "$APP/Contents/Resources/SimHubLogo.png"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
-cp Mac/tools/module_select.py Mac/tools/adb_server.py Mac/tools/runtime_health.py Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
+cp Mac/tools/runtime_lease.py Mac/tools/module_select.py Mac/tools/adb_server.py Mac/tools/runtime_health.py Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
 if [ -d Mac/tools/voice-runtime ]; then cp -R Mac/tools/voice-runtime "$APP/Contents/Resources/Mac/tools/"; fi
 cp Mac/engine/LICENSE-CellBridge "$APP/Contents/Resources/"
 python3 - "$ROOT" "$APP" "$BUILD" <<'PY'

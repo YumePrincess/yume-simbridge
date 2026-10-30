@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ func (e *engine) cloudWakeLoop(ctx context.Context) {
 	delay := 5 * time.Second
 	for ctx.Err() == nil {
 		dialer := ws.Dialer{Timeout: 15 * time.Second, Header: ws.HandshakeHeaderHTTP(http.Header{
+			"X-SimHub-Device": []string{os.Getenv("SIMHUB_LEASE_DEVICE")}, "X-SimHub-Session": []string{os.Getenv("SIMHUB_LEASE_SESSION")}, "X-SimHub-Epoch": []string{os.Getenv("SIMHUB_LEASE_EPOCH")},
 			"Authorization": []string{"Bearer " + e.boot.Token}, "User-Agent": []string{"YumeSimHub/" + Version},
 		})}
 		conn, buffer, _, err := dialer.Dial(ctx, strings.Replace(e.boot.Origin, "https://", "wss://", 1)+"/edge/wake")

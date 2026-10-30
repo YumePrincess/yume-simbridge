@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27022"
+var Build = "27023"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -90,6 +90,9 @@ func main() {
 	py := flag.String("python", "python3", "Python interpreter")
 	route := flag.String("route", "", "route reset script")
 	flag.Parse()
+	if os.Getenv("SIMHUB_LEASE_SESSION") == "" {
+		fatal(errors.New("start runtime through the ownership supervisor"))
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	b, err := os.ReadFile(*cfg)
@@ -106,7 +109,7 @@ func main() {
 	if err = os.MkdirAll(*data, 0700); err != nil {
 		fatal(err)
 	}
-	database, err := db.Open(filepath.Join(*data, "messages.sqlite"))
+	database, err := db.Open(databasePath(*data))
 	if err != nil {
 		fatal(err)
 	}
@@ -178,6 +181,7 @@ func (e *engine) api(ctx context.Context, path string, input, output any) error 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setLeaseHeaders(req.Header)
 	req.Header.Set("Authorization", "Bearer "+e.boot.Token)
 	r, err := e.client.Do(req)
 	if err != nil {

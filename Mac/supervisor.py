@@ -24,38 +24,64 @@ data=Path(args.data); data.mkdir(mode=0o700,parents=True,exist_ok=True)
 os.umask(0o077)
 children=[]
 stopping=False
+lease=None
 
 def publish_offline():
     status={'modemConnected':False,'voiceReady':False,'sipRegistered':False,'busy':False,'sim':'unavailable'}
     (data/'edge-health.json').write_text(json.dumps(dict(status,updated=int(time.time()*1000))))
     try:
         cfg=json.loads(Path(args.config).read_text())
-        req=urllib.request.Request(cfg['origin']+'/edge/sync',data=json.dumps(status).encode(),headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'})
+        headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'}
+        if lease: headers.update(lease.headers())
+        req=urllib.request.Request(cfg['origin']+'/edge/sync',data=json.dumps(status).encode(),headers=headers)
         urllib.request.urlopen(req,timeout=4).close()
     except Exception: pass
 
 
 def stop(*_):
     global stopping
+    if stopping: return
     stopping=True
-    publish_offline()
     for child in reversed(children):
         if child.poll() is None:
-            child.terminate()
+            os.killpg(child.pid,signal.SIGTERM)
     deadline=time.monotonic()+10
     for child in reversed(children):
         try: child.wait(max(.1,deadline-time.monotonic()))
-        except subprocess.TimeoutExpired: child.kill()
+        except subprocess.TimeoutExpired: os.killpg(child.pid,signal.SIGKILL); child.wait()
+    # Inspect the actual owned module helper before releasing ownership.
+    if 'voice_runtime' in globals():
+        try: voice_runtime.stop_voice_route()
+        except Exception: pass
+    publish_offline()
+    if lease: lease.release()
     raise SystemExit(0)
 
 signal.signal(signal.SIGTERM,stop)
 signal.signal(signal.SIGINT,stop)
 
 def start(command,**kw):
-    p=subprocess.Popen(command,**kw)
+    p=subprocess.Popen(command,start_new_session=True,**kw)
     children.append(p)
     return p
 
+sys.path.insert(0,str(root/'tools'))
+from runtime_lease import RuntimeLease
+lease=RuntimeLease(json.loads(Path(args.config).read_text()),Path(args.config).parent,data)
+# Waiting devices never touch USB or register SIP.
+while not stopping:
+    try:
+        lease.acquire()
+        break
+    except Exception:
+        (data/'edge-health.json').write_text(json.dumps({'modemConnected':False,'busy':False,'runtimeState':'standby','updated':int(time.time()*1000)}))
+        time.sleep(10)
+def emergency_stop():
+    for child in reversed(children):
+        try: os.killpg(child.pid,signal.SIGKILL)
+        except ProcessLookupError: pass
+    os._exit(1)
+lease.watch(emergency_stop)
 publish_offline()
 
 # A reboot can take a minute to enumerate USB; do not settle into SMS-only mode prematurely.
@@ -107,7 +133,8 @@ if voice:
         os.mkfifo(fifo,0o600)
     # RDWR handles let CoreAudio open both pipes before the first call arrives.
     held=[os.open(str(f),os.O_RDWR|os.O_NONBLOCK) for f in [rx,tx]]
-    audio=start([str(root/'bin/voice-audio-bridge'),'--fifo-rx',str(rx),'--fifo-tx',str(tx),'--health',str(data/'audio-health.json')])
+    audio_command=([sys.executable,'-s','-B',str(root/'tools/linux_audio_bridge.py')] if sys.platform == 'linux' else [str(root/'bin/voice-audio-bridge')])
+    audio=start(audio_command+['--fifo-rx',str(rx),'--fifo-tx',str(tx),'--health',str(data/'audio-health.json')])
     command+=['--rx',str(rx),'--tx',str(tx)]
 edge=start(command)
 from runtime_health import AudioWatchdog

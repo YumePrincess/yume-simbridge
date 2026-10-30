@@ -1,3 +1,4 @@
+import { runtimeAPI, runtimeState, requireRuntime } from "./runtime-lease";
 import { removeHistory } from "./history";
 export { WakeHub } from "./wake-hub";
 import { wakeEdge } from "./wake";
@@ -37,6 +38,11 @@ async function edgeAPI(
     !equal(req.headers.get("Authorization") || "", "Bearer " + env.EDGE_TOKEN)
   )
     fail("Unauthorized", 401);
+  if (path === "/edge/runtime/state" && req.method === "GET") return json(await runtimeState(env));
+  if (path.startsWith("/edge/runtime/") && req.method === "POST")
+    return json(await runtimeAPI(env, path, await body(req)));
+  if (["/edge/wake", "/edge/sync", "/edge/result", "/edge/sms", "/edge/incoming", "/edge/incoming-ready", "/edge/authorize", "/edge/call-event"].includes(path))
+    await requireRuntime(req, env);
   if (path === "/edge/wake" && req.method === "GET")
     return env.WAKE_HUB.getByName("module").fetch(req);
   if (path.startsWith("/edge/history/") && req.method === "DELETE") {

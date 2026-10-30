@@ -1,0 +1,1 @@
+{"admin/services/yume-simhub":{"title":"Yume SIM Hub","order":60,"action":{"type":"view","path":"yume-simhub/overview"},"depends":{"acl":["luci-app-yume-simhub"]}}}
