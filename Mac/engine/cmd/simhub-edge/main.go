@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27024"
+var Build = "27026"
 
 type bootstrap struct {
 	Origin string `json:"origin"`

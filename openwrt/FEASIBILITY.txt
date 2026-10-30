@@ -1,6 +1,6 @@
 Yume SIM Hub / GL.iNet BE6500 feasibility — 2026-10-30
 
-Status: feasible development target, not a working LuCI gateway release.
+Status: initial assessment. See README.md for the subsequently implemented gateway and validation status.
 
 Read-only SSH observations
 - GL-BE6500, GL firmware 4.9.0, OpenWrt 23.05-SNAPSHOT r0-3601c2a49.
