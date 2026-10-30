@@ -6,8 +6,8 @@ for pid in $(pidof rpcd); do
     [ "$(readlink "/proc/$pid/exe")" = /sbin/rpcd ] && kill -TERM "$pid" 2>/dev/null
 done
 attempt=0
-while [ -n "$(pidof rpcd)" ] && [ "$attempt" -lt 30 ]; do
-    sleep 0.1
+while [ -n "$(pidof rpcd)" ] && [ "$attempt" -lt 3 ]; do
+    sleep 1
     attempt=$((attempt + 1))
 done
 for pid in $(pidof rpcd); do

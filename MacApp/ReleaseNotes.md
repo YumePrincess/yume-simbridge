@@ -1,4 +1,4 @@
-Yume SIM Hub 27.2.0 · Build 27027
+Yume SIM Hub 27.2.0 · Build 27028
 
 - 使用用户新提供的透明 SIP 品牌图，统一 Mac 系统图标、应用内 Logo、安装包与 LuCI 图标。
 - LuCI 按 Mac 的八个页面分区与概览信息层级重做，支持简体中文、繁体中文、英语、日语、法语及跟随系统，界面语言独立于电话/Gotify 服务语言。

@@ -27,7 +27,7 @@ var dictionaries={
     "Standby": "待机中",
     "Stopped": "服务已停止",
     "In call": "通话中",
-    "Module": "蜂窝模块",
+    "Module": "模块",
     "Connected": "已连接",
     "Disconnected": "未连接",
     "SIM ready": "SIM 已就绪",
@@ -180,7 +180,8 @@ var dictionaries={
     "Mac uses the signed update ZIP; OpenWrt uses the matching IPK.": "Mac 使用签名更新 ZIP；OpenWrt 使用同版本 IPK。",
     "Open downloads": "打开下载页",
     "Open package manager": "打开软件包管理",
-    "About": "关于"
+    "About": "关于",
+    "Answer after confirmation (default)": "目标方确认后接听（默认）"
   },
   "zh-Hant": {
     "Communication": "通訊",
@@ -208,7 +209,7 @@ var dictionaries={
     "Standby": "待命中",
     "Stopped": "服務已停止",
     "In call": "通話中",
-    "Module": "行動通訊模組",
+    "Module": "模組",
     "Connected": "已連線",
     "Disconnected": "未連線",
     "SIM ready": "SIM 已就緒",
@@ -361,7 +362,8 @@ var dictionaries={
     "Mac uses the signed update ZIP; OpenWrt uses the matching IPK.": "Mac 使用簽章更新 ZIP；OpenWrt 使用相同版本 IPK。",
     "Open downloads": "開啟下載頁",
     "Open package manager": "開啟套件管理",
-    "About": "關於"
+    "About": "關於",
+    "Answer after confirmation (default)": "目標方確認後接聽（預設）"
   },
   "ja": {
     "Communication": "通信",
@@ -542,7 +544,8 @@ var dictionaries={
     "Mac uses the signed update ZIP; OpenWrt uses the matching IPK.": "Mac は署名済み更新 ZIP、OpenWrt は同じ版の IPK を使用します。",
     "Open downloads": "ダウンロードを開く",
     "Open package manager": "パッケージ管理を開く",
-    "About": "このアプリについて"
+    "About": "このアプリについて",
+    "Answer after confirmation (default)": "相手の確認後に応答（既定）"
   },
   "fr": {
     "Communication": "Communication",
@@ -723,7 +726,8 @@ var dictionaries={
     "Mac uses the signed update ZIP; OpenWrt uses the matching IPK.": "Mac utilise le ZIP signé ; OpenWrt utilise l’IPK correspondant.",
     "Open downloads": "Ouvrir les téléchargements",
     "Open package manager": "Ouvrir le gestionnaire de paquets",
-    "About": "À propos"
+    "About": "À propos",
+    "Answer after confirmation (default)": "Répondre après confirmation (par défaut)"
   }
 };
 return baseclass.extend({translate:function(lang,key){return (dictionaries[lang]||{})[key]||key;}});
