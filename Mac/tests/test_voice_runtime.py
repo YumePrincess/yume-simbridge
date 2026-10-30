@@ -18,6 +18,20 @@ class RouteResetTest(unittest.TestCase):
         adb.close.assert_called_once()
 
 
+class ActiveRouteLatencyTest(unittest.TestCase):
+    def test_active_owned_helper_does_not_wait_for_idle_pcm_streams(self):
+        adb=MagicMock()
+        def shell(command,*args):
+            if command=='id -u':return ('0',0)
+            if command=='uname -r':return (runtime.KERNEL_RELEASE,0)
+            return ('',0)
+        adb.shell_checked.side_effect=shell
+        with patch.object(runtime,'runtime_installed',return_value=(True,'')),patch.object(runtime,'ADBClient',return_value=adb),patch.object(runtime,'RUNTIME_FILES',[]),patch.object(runtime,'_voice_shell'),patch.object(runtime,'_ensure_calibration'),patch.object(runtime,'_route_is_ready',return_value=False),patch.object(runtime,'_route_is_active',side_effect=[False,True]),patch.object(runtime.time,'sleep') as sleep:
+            runtime._start_voice_route()
+        sleep.assert_not_called()
+        adb.close.assert_called_once()
+
+
 class ModuleADBSelectionTest(unittest.TestCase):
     @staticmethod
     def interface(number, cls=0xff, sub=0x42, protocol=1):

@@ -257,7 +257,7 @@ async function edgeAPI(
       .bind(v.status, String(v.result || "").slice(0, 200), now(), v.id)
       .run();
     if (v.status === "failed" || v.status === "ended")
-      await cancelForward(env, v.id);
+      ctx.waitUntil(cancelForward(env, v.id));
     return json({ ok: true });
   }
   return json({ error: "Not found" }, 404);

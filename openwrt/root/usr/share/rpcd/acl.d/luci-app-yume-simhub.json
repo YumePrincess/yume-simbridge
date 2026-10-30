@@ -1,7 +1,7 @@
 {
  "luci-app-yume-simhub": {
   "description": "Manage Yume SIM Hub",
-  "read": {"ubus":{"yume-simhub":["status","settings"]},"uci":["yume-simhub"]},
+  "read": {"ubus":{"yume-simhub":["health","status","settings"]},"uci":["yume-simhub"]},
   "write": {"ubus":{"yume-simhub":["configure","save_settings","switch","service","preferences","action","select_module"]},"uci":["yume-simhub"]}
  }
 }

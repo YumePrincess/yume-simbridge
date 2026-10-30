@@ -32,7 +32,7 @@ export async function voice(req: Request, env: Env, ctx: ExecutionContext) {
   const path = new URL(req.url).pathname;
   if (path === "/twilio/recording") {
     await recordingCallback(env, fields);
-    ctx.waitUntil(recordingTasks(env));
+    ctx.waitUntil(recordingTasks(env, fields.RecordingSid));
     return new Response("OK");
   }
   const sid = fields.CallSid || "";

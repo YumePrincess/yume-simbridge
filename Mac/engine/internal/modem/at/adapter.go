@@ -234,7 +234,12 @@ func (a *Adapter) Hangup(ctx context.Context, callID modem.CallID) error {
 	if err := a.validateActive(callID); err != nil {
 		return err
 	}
-	_, err := a.client.Exchange(ctx, "ATH")
+	// CHUP is the explicit 3GPP voice release. QDC507 can acknowledge ATH
+	// without releasing the real voice context; retain ATH for other firmware.
+	_, err := a.client.Exchange(ctx, "AT+CHUP")
+	if err != nil {
+		_, err = a.client.Exchange(ctx, "ATH")
+	}
 	if err == nil {
 		a.finishActive(callID, "local_hangup")
 	}
@@ -477,7 +482,7 @@ func clccActive(lines []string, dir int) bool {
 		if dirErr != nil || stateErr != nil {
 			continue
 		}
-		if state == 0 && (dir < 0 || callDir == dir) {
+		if state == 0 && len(fields) > 3 && strings.TrimSpace(fields[3]) == "0" && (dir < 0 || callDir == dir) {
 			return true
 		}
 	}
@@ -768,3 +773,25 @@ func signalBars(rssi int) int {
 }
 
 var _ modem.ModemControl = (*Adapter)(nil)
+
+// QDC507 can retain empty data-call contexts. Only a real voice entry keeps
+// an answered bridge alive when a NO CARRIER notification is missing.
+func (a *Adapter) VoiceCallPresent(ctx context.Context, callID modem.CallID) (bool, error) {
+	if err := a.validateActive(callID); err != nil {
+		return false, nil
+	}
+	lines, err := a.client.Exchange(ctx, "AT+CLCC")
+	if err != nil {
+		return false, err
+	}
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "+CLCC:") {
+			continue
+		}
+		f := strings.Split(strings.TrimPrefix(line, "+CLCC:"), ",")
+		if len(f) > 3 && strings.TrimSpace(f[3]) == "0" && (strings.TrimSpace(f[2]) == "0" || strings.TrimSpace(f[2]) == "1") {
+			return true, nil
+		}
+	}
+	return false, nil
+}

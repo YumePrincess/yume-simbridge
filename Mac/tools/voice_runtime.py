@@ -602,12 +602,10 @@ def _start_voice_route():
             if _route_is_ready(adb):
                 return
             if _route_is_active(adb):
-                # bridge 已激活，等 Mac 打开 UAC 流后 RUNNING 会跟上
-                for _ in range(100):
-                    if _route_is_ready(adb):
-                        return
-                    time.sleep(0.2)
-                return  # 宽松成功：bridge 存活即认为路由就绪
+                # The owned route is active. PCM RUNNING depends on the host
+                # opening its audio streams; idle CoreAudio must not add a 20s
+                # delay before the next call can open those same streams.
+                return
             time.sleep(0.1)
         route_log, _ = adb.shell_checked(f"test ! -f '{ROUTE_LOG_FILE}' || tail -n 160 '{ROUTE_LOG_FILE}'", 8)
         detail = route_log.strip()[-1000:]

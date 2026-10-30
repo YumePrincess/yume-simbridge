@@ -44,7 +44,7 @@ export async function recordingCallback(env: Env, f: Record<string, string>) {
     .bind(r.sid, JSON.stringify(r), now())
     .run();
 }
-async function removeTwilio(env: Env, sid: string) {
+async function removeTwilioOnce(env: Env, sid: string) {
   const c = await config(env);
   const r = await fetch(
     `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Recordings/${sid}.json`,
@@ -54,25 +54,29 @@ async function removeTwilio(env: Env, sid: string) {
         Authorization:
           "Basic " + btoa(env.TWILIO_ACCOUNT_SID + ":" + c.twilioToken),
       },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(5000),
     },
   );
   await r.body?.cancel();
-  if (r.status !== 404 && !r.ok) throw Error("Twilio recording delete failed");
+  if (r.status !== 404 && !r.ok) throw Error("Twilio recording delete failed: "+r.status);
 }
-export async function recordingTasks(env: Env) {
+async function removeTwilio(env: Env, sid: string) {
+  try { await removeTwilioOnce(env,sid); }
+  catch { await removeTwilioOnce(env,sid); }
+}
+export async function recordingTasks(env: Env, onlySid?: string) {
   // Durable lease prevents concurrent callbacks/cron from archiving the same source.
   const rows = await env.DB.prepare(
-    "SELECT sid FROM recordings WHERE status IN ('pending','purge','deleting') OR (status='archiving' AND updated<?) ORDER BY updated LIMIT 3",
+    "SELECT sid FROM recordings WHERE (status IN ('pending','purge','deleting') OR (status='archiving' AND updated<?)) AND (? IS NULL OR sid=?) ORDER BY updated LIMIT 3",
   )
-    .bind(now() - 600000)
+    .bind(now() - 600000, onlySid || null, onlySid || null)
     .all<{ sid: string }>();
   for (const item of rows.results) {
     const lease = crypto.randomUUID();
     const row = await env.DB.prepare(
-      "UPDATE recordings SET lease=?,updated=?,attempts=attempts+1,status=CASE WHEN status IN ('pending','archiving') THEN 'archiving' ELSE status END WHERE sid=? AND (lease IS NULL OR updated<?) AND attempts<30 RETURNING value,status",
+      "UPDATE recordings SET lease=?,updated=?,attempts=attempts+1,status=CASE WHEN status IN ('pending','archiving') THEN 'archiving' ELSE status END WHERE sid=? AND (lease IS NULL OR updated<? OR (status IN ('purge','deleting') AND updated<?)) AND status IN ('pending','archiving','purge','deleting') RETURNING value,status",
     )
-      .bind(lease, now(), item.sid, now() - 600000)
+      .bind(lease, now(), item.sid, now() - 600000, now() - 30000)
       .first<{ value: string; status: string }>();
     if (!row) continue;
     let rec = JSON.parse(row.value) as Recording;
@@ -112,6 +116,7 @@ export async function recordingTasks(env: Env) {
         .bind(JSON.stringify(rec), now(), rec.sid, lease)
         .run();
     } catch {
+      console.warn(JSON.stringify({event:"recording.retry.pending",stage:row.status}));
       // After successful verification, retain the purge stage even if Twilio deletion fails.
       await env.DB.prepare(
         "UPDATE recordings SET lease=NULL,status=CASE WHEN status='archiving' THEN 'pending' ELSE status END,updated=? WHERE sid=? AND lease=?",
@@ -176,7 +181,7 @@ export async function recordingAPI(
     await env.DB.prepare("UPDATE recordings SET attempts=0 WHERE sid=?")
       .bind(m[1])
       .run();
-    ctx.waitUntil(recordingTasks(env));
+    ctx.waitUntil(recordingTasks(env,m[1]));
     return Response.json({ ok: true });
   }
   if (req.method === "DELETE" && !m[2]) {
@@ -185,7 +190,7 @@ export async function recordingAPI(
     )
       .bind(m[1])
       .run();
-    ctx.waitUntil(recordingTasks(env));
+    ctx.waitUntil(recordingTasks(env,m[1]));
     return Response.json({ ok: true });
   }
   fail("Method not allowed", 405);

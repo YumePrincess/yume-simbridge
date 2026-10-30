@@ -6,15 +6,15 @@ import re
 from pathlib import Path
 import subprocess
 import sys
-import urllib.request
 import urllib.error
 sys.dont_write_bytecode=True
 os.umask(0o077)
 BASE=Path('/etc/yume-simhub')
 BOOT=BASE/'bootstrap.json'
-METHODS={'status':{},'configure':{'token':'','enabled':True},'settings':{},'save_settings':{'settings':{}},'switch':{'device':''},'service':{'action':''},'preferences':{'language':'','appearance':''},'action':{'operation':'','id':'','code':'','before':''},'select_module':{'location':''}}
+METHODS={'health':{},'status':{},'configure':{'token':'','enabled':True},'settings':{},'save_settings':{'settings':{}},'switch':{'device':''},'service':{'action':''},'preferences':{'language':'','appearance':''},'action':{'operation':'','id':'','code':'','before':''},'select_module':{'location':''}}
 
 def cloud(path, body=None, method=None):
+    import urllib.request
     cfg=json.loads(BOOT.read_text())
     req=urllib.request.Request('https://worker.example.com'+path,data=json.dumps(body).encode() if body is not None else None,
         method=method,headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'})
@@ -27,6 +27,7 @@ def service(action):
 
 def execute(method, v):
     if method=='configure':
+        import urllib.request
         BASE.mkdir(mode=0o700,parents=True,exist_ok=True);os.chmod(BASE,0o700)
         cfg=json.loads(BOOT.read_text()) if BOOT.exists() else {'origin':'https://worker.example.com'}
         token=v.get('token','')
@@ -96,13 +97,21 @@ def execute(method, v):
             subprocess.run(['/sbin/uci','set','yume-simhub.main.'+key+'='+value],check=True)
         subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
         return {'ok':True}
+    if method=='health':
+        import time
+        try:local=json.loads(Path('/tmp/yume-simhub/edge-health.json').read_text())
+        except (OSError,ValueError):local={}
+        if not 0<=time.time()*1000-local.get('updated',0)<12000:
+            local.update(modemConnected=False,voiceReady=False,sipRegistered=False,busy=False)
+        try:
+            services=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simhub"}'],timeout=1))
+            running=any(item.get('running') for item in services.get('yume-simhub',{}).get('instances',{}).values())
+        except Exception:running=False
+        return {'local':local,'running':running}
     if method=='status':
         result={'configured':BOOT.exists(),'local':{},'runtime':{},'error':'','version':json.loads(Path('/usr/lib/yume-simhub/version.json').read_text())}
         try:result['local']=json.loads(Path('/tmp/yume-simhub/edge-health.json').read_text())
         except (OSError,ValueError):pass
-        if BOOT.exists():
-            try:result['runtime']=cloud('/edge/runtime/state')
-            except Exception:result['error']='Cloud runtime API unavailable; check connection and deployed server version'
         def preference(key,default):
             value=subprocess.run(['/sbin/uci','-q','get','yume-simhub.main.'+key],capture_output=True,text=True,timeout=2)
             return value.stdout.strip() if value.returncode==0 else default

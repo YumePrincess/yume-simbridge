@@ -58,6 +58,7 @@ type Client struct {
 	ioCh       chan struct{}
 	pollParser Parser
 	lineHandle func(string)
+	handlerMu  sync.RWMutex
 	// DryRun makes SMS submissions use AT+CMGW (store-only) instead of
 	// AT+CMGS (network send). Costs nothing and never delivers; used for
 	// validation so we never burn the user's SMS balance
@@ -87,9 +88,9 @@ func (c *Client) acquireIO(ctx context.Context) error {
 func (c *Client) releaseIO() { <-c.ioCh }
 
 func (c *Client) SetLineHandler(handler func(string)) {
-	c.mu.Lock()
+	c.handlerMu.Lock()
 	c.lineHandle = handler
-	c.mu.Unlock()
+	c.handlerMu.Unlock()
 }
 
 func (c *Client) SetDryRun(dryRun bool) {
@@ -107,7 +108,7 @@ func (c *Client) Exchange(ctx context.Context, command string) ([]string, error)
 	defer c.releaseIO()
 	c.mu.Lock()
 	response, unsolicited, err := c.exchangeLocked(ctx, command)
-	handler := c.lineHandle
+	handler := c.lineHandler()
 	c.mu.Unlock()
 	dispatchUnsolicited(handler, unsolicited)
 	return response, err
@@ -118,7 +119,6 @@ func (c *Client) exchangeLocked(ctx context.Context, command string) ([]string, 
 		return nil, nil, fmt.Errorf("write AT command: %w", err)
 	}
 
-	parser := Parser{}
 	buf := make([]byte, 256)
 	var response []string
 	var unsolicited []string
@@ -130,21 +130,30 @@ func (c *Client) exchangeLocked(ctx context.Context, command string) ([]string, 
 		}
 		n, err := readWithContext(ctx, c.port, buf)
 		if n > 0 {
-			for _, line := range parser.Feed(buf[:n]) {
+			final := false
+			var finalErr error
+			for _, line := range c.pollParser.Feed(buf[:n]) {
 				if strings.EqualFold(line, command) {
 					continue
 				}
 				if isUnsolicited(line) {
-					unsolicited = append(unsolicited, line)
+					c.dispatchLine(line)
+					if strings.HasPrefix(command, "ATD") && (strings.Contains(line, "NO CARRIER") || strings.Contains(line, "BUSY") || strings.Contains(line, "NO ANSWER")) {
+						final = true
+						finalErr = fmt.Errorf("%w: %s", ErrCommandFailed, line)
+					}
 					continue
 				}
 				response = append(response, line)
 				if IsFinal(line) {
 					if line != "OK" {
-						return response, unsolicited, fmt.Errorf("%w: %s", ErrCommandFailed, line)
+						finalErr = fmt.Errorf("%w: %s", ErrCommandFailed, line)
 					}
-					return response, unsolicited, nil
+					final = true
 				}
+			}
+			if final {
+				return response, unsolicited, finalErr
 			}
 		}
 		if err != nil {
@@ -169,7 +178,7 @@ func (c *Client) SendPDU(ctx context.Context, tpduLength int, pdu string) ([]str
 	defer c.releaseIO()
 	c.mu.Lock()
 	response, unsolicited, err := c.sendPDULocked(ctx, tpduLength, pdu)
-	handler := c.lineHandle
+	handler := c.lineHandler()
 	c.mu.Unlock()
 	dispatchUnsolicited(handler, unsolicited)
 	return response, err
@@ -218,7 +227,7 @@ func (c *Client) SendTextSMS(ctx context.Context, destination, body string) ([]s
 	defer c.releaseIO()
 	c.mu.Lock()
 	response, unsolicited, err := c.sendTextLocked(ctx, destination, body)
-	handler := c.lineHandle
+	handler := c.lineHandler()
 	c.mu.Unlock()
 	dispatchUnsolicited(handler, unsolicited)
 	return response, err
@@ -265,41 +274,41 @@ func (c *Client) sendTextLocked(ctx context.Context, destination, body string) (
 // non-blocking read at a time; if a command holds the lock it simply
 // skips this poll (lock is contended by design — never block URC reads
 // behind a command deadline).
+func (c *Client) lineHandler() func(string) {
+	c.handlerMu.RLock()
+	defer c.handlerMu.RUnlock()
+	return c.lineHandle
+}
+
+// URCs carry call-control events; dispatch while a command is still pending.
+// Handlers must enqueue events and must not issue synchronous AT commands.
+func (c *Client) dispatchLine(line string) {
+	if handler := c.lineHandler(); handler != nil {
+		handler(line)
+	}
+}
 func (c *Client) Run(ctx context.Context) error {
 	buf := make([]byte, 256)
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		var n int
 		select {
 		case c.ioCh <- struct{}{}:
-			n, _ = readAvailable(c.port, buf)
+			n, _ := readAvailable(c.port, buf)
+			if n > 0 {
+				for _, line := range c.pollParser.Feed(buf[:n]) {
+					c.dispatchLine(line)
+				}
+			}
 			<-c.ioCh
 		default:
-			// A command exchange owns the port; skip this poll.
-		}
-		var lines []string
-		if n > 0 {
-			c.mu.Lock()
-			lines = c.pollParser.Feed(buf[:n])
-			c.mu.Unlock()
-		}
-		c.mu.Lock()
-		handler := c.lineHandle
-		c.mu.Unlock()
-		for _, line := range lines {
-			if handler != nil {
-				handler(line)
-			}
 		}
 		timer := time.NewTimer(10 * time.Millisecond)
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
+			timer.Stop()
 			return ctx.Err()
 		}
 	}
@@ -313,7 +322,6 @@ func readAvailable(port io.ReadWriteCloser, buffer []byte) (int, error) {
 }
 
 func (c *Client) readUntil(ctx context.Context, prompt bool) ([]string, []string, error) {
-	parser := Parser{}
 	buf := make([]byte, 256)
 	var response []string
 	var unsolicited []string
@@ -326,21 +334,30 @@ func (c *Client) readUntil(ctx context.Context, prompt bool) ([]string, []string
 		n, err := readWithContext(ctx, c.port, buf)
 		if n > 0 {
 			chunk := buf[:n]
-			if prompt && bytes.Contains(chunk, []byte(">")) {
-				return response, unsolicited, nil
-			}
-			for _, line := range parser.Feed(chunk) {
+			gotPrompt := prompt && bytes.Contains(chunk, []byte(">"))
+			final := false
+			var finalErr error
+			for _, line := range c.pollParser.Feed(chunk) {
 				if isUnsolicited(line) {
-					unsolicited = append(unsolicited, line)
+					c.dispatchLine(line)
 					continue
 				}
 				response = append(response, line)
 				if IsFinal(line) {
 					if line != "OK" {
-						return response, unsolicited, fmt.Errorf("%w: %s", ErrCommandFailed, line)
+						finalErr = fmt.Errorf("%w: %s", ErrCommandFailed, line)
 					}
-					return response, unsolicited, nil
+					final = true
 				}
+			}
+			if gotPrompt {
+				if strings.TrimSpace(string(c.pollParser.buffer)) == ">" {
+					c.pollParser.buffer = nil
+				}
+				return response, unsolicited, nil
+			}
+			if final {
+				return response, unsolicited, finalErr
 			}
 		}
 		if err != nil {

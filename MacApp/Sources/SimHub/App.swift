@@ -133,6 +133,7 @@ struct Bootstrap: Codable {
   @Published var playing: String?
   private var player: AVPlayer?
   private var playbackFile: URL?
+  private var playbackObserver: NSObjectProtocol?
   @Published var settings = Settings()
   @Published var edge = Edge()
   @Published var messages: [Record] = []
@@ -190,6 +191,10 @@ struct Bootstrap: Codable {
     }
     showSetup = !UserDefaults.standard.bool(forKey: "setupCompleted")
     loginItem = SMAppService.mainApp.status == .enabled
+    let playbackCache = folder.appendingPathComponent("Playback", isDirectory: true)
+    for file in (try? FileManager.default.contentsOfDirectory(at: playbackCache, includingPropertiesForKeys: nil)) ?? [] {
+      if file.pathExtension == "mp3", UUID(uuidString: file.deletingPathExtension().lastPathComponent) != nil { try? FileManager.default.removeItem(at: file) }
+    }
     healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.refreshLocalHealth() }
     }
@@ -204,7 +209,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27031")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27032")"
   }
   @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
   func openReleasePage() {
@@ -344,7 +349,7 @@ struct Bootstrap: Codable {
     defer { refreshInFlight = false }
     let now = Date()
     if force || now >= stateRefreshAfter {
-      stateRefreshAfter = now.addingTimeInterval(60)
+      stateRefreshAfter = now.addingTimeInterval(5)
       do {
         let s = try JSONDecoder().decode(Snapshot.self, from: await request("/edge/state"))
         if !loaded || cloudSettingsBaseline.map({ settings == $0 }) == true {
@@ -361,15 +366,15 @@ struct Bootstrap: Codable {
         messages = s.events
         jobs = s.jobs
       } catch {
-        stateRefreshAfter = Date().addingTimeInterval(300)
+        stateRefreshAfter = Date().addingTimeInterval(10)
         if !loaded { notice = error.localizedDescription }
       }
     }
     if selectedTab == 4 && (force || now >= recordingsRefreshAfter) {
-      recordingsRefreshAfter = now.addingTimeInterval(60)
+      recordingsRefreshAfter = now.addingTimeInterval(5)
       do {
         recordings = try JSONDecoder().decode([RecordingInfo].self, from: await request("/edge/recordings"))
-      } catch { recordingsRefreshAfter = Date().addingTimeInterval(300) }
+      } catch { recordingsRefreshAfter = Date().addingTimeInterval(10) }
     }
     refreshLocalHealth()
     readLog()
@@ -575,6 +580,7 @@ struct Bootstrap: Codable {
     return target
   }
   func stopPlayback() {
+    if let observer = playbackObserver { NotificationCenter.default.removeObserver(observer); playbackObserver = nil }
     player?.pause()
     player = nil
     playing = nil
@@ -594,6 +600,9 @@ struct Bootstrap: Codable {
       playbackFile = url
       player = AVPlayer(url: url)
       playing = r.sid
+      playbackObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player?.currentItem, queue: .main) { [weak self] _ in
+        Task { @MainActor in self?.stopPlayback() }
+      }
       player?.play()
     } catch { notice = error.localizedDescription }
   }

@@ -46,6 +46,7 @@ func TestClccActiveMatchesDirection(t *testing.T) {
 		{"ringing inbound is not active for any", inboundRinging, -1, false},
 		{"alerting outbound is not active", outboundAlerting, 0, false},
 		{"no call is never active", noCall, -1, false},
+		{"ghost data context is not an answered voice call", []string{`+CLCC: 1,1,0,1,0,"",128`}, 1, false},
 		{"malformed line is ignored", []string{"+CLCC: 1,x,0"}, -1, false},
 		{"short line is ignored", []string{"+CLCC: 1,1"}, 1, false},
 	}

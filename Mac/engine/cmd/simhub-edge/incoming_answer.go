@@ -73,3 +73,41 @@ func watchIncomingRinging(ctx context.Context, cancel context.CancelFunc, check 
 	}()
 	return func() { stop(); <-done }
 }
+
+func watchConnectedCall(ctx context.Context, cancel context.CancelFunc, check func(context.Context) (bool, error)) func() {
+	watchCtx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		failures := 0
+		for {
+			select {
+			case <-watchCtx.Done():
+				return
+			case <-ticker.C:
+			}
+			probe, end := context.WithTimeout(watchCtx, time.Second)
+			present, err := check(probe)
+			end()
+			if watchCtx.Err() != nil {
+				return
+			}
+			if err != nil {
+				failures++
+				if failures < 3 {
+					continue
+				}
+			} else {
+				failures = 0
+				if present {
+					continue
+				}
+			}
+			cancel()
+			return
+		}
+	}()
+	return func() { stop(); <-done }
+}

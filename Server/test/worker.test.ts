@@ -1141,6 +1141,7 @@ describe("deferred SIM pickup and cancellation", () => {
         .spyOn(globalThis, "fetch")
         .mockResolvedValue(new Response("{}"));
       expect((await edge("/edge/call-event", { id, status })).status).toBe(200);
+      await Promise.all(pending);
       expect(request).toHaveBeenCalledOnce();
       expect(request.mock.calls[0][0]).toBe(
         `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls/${sid}.json`,
@@ -1404,5 +1405,48 @@ describe("LuCI scoped recording playback",()=>{
   const ticket=await recordingTicket(env,"RE"+"8".repeat(32));
   vi.useFakeTimers();vi.setSystemTime(Date.now()+301000);
   try{expect((await worker.fetch!(new Request(ticket.url),env,ctx)).status).toBe(403);}finally{vi.useRealTimers();}
+ });
+});
+
+describe("R2 is the only retained recording copy",()=>{
+ function memoryRecordings(corrupt=false) {
+  const objects=new Map<string,Uint8Array>();const events:string[]=[];
+  env.RECORDINGS={
+   createMultipartUpload:async(key:string)=>{const parts:Uint8Array[]=[];return {
+    uploadPart:async(n:number,bytes:Uint8Array)=>{parts[n-1]=bytes;return {partNumber:n,etag:"test"}},
+    complete:async()=>{objects.set(key,new Uint8Array(Buffer.concat(parts)));events.push("r2.complete")},abort:async()=>{}
+   }},
+   get:async(key:string)=>{const stored=objects.get(key);if(!stored)return null;const bytes=stored.slice();if(corrupt)bytes[0]^=1;events.push("r2.readback");return {body:new ReadableStream({start(c){c.enqueue(bytes);c.close()}})}},
+   delete:async(key:string)=>{objects.delete(key)}
+  } as unknown as R2Bucket;
+  return events;
+ }
+ it("processes a new callback ahead of backlog and deletes Twilio immediately after verification",async()=>{
+  const events=memoryRecordings();const source=new TextEncoder().encode("private recording");const target="RE"+"f".repeat(32);
+  for(const x of ["1","2","3","4","f"])await recordingCallback(env,{RecordingSid:"RE"+x.repeat(32),CallSid:sid,RecordingStatus:"completed"});
+  vi.spyOn(globalThis,"fetch").mockImplementation(async(_url,init)=>{
+   if(init?.method==="DELETE"){expect(events).toContain("r2.readback");events.push("twilio.delete");return new Response(null,{status:204})}
+   events.push("twilio.download");return new Response(source)
+  });
+  await recordingTasks(env,target);
+  const row=await db.prepare("SELECT status,value FROM recordings WHERE sid=?").bind(target).first() as {status:string,value:string};
+  expect(row.status).toBe("archived");expect(JSON.parse(row.value).twilioDeleted).toBe(true);
+  expect(events).toEqual(["twilio.download","r2.complete","r2.readback","twilio.delete"]);
+  expect((await db.prepare("SELECT COUNT(*) AS n FROM recordings WHERE status='pending'").first() as {n:number}).n).toBe(4);
+ });
+ it("never deletes the only readable copy if R2 authentication fails",async()=>{
+  memoryRecordings(true);const target="RE"+"f".repeat(32);await recordingCallback(env,{RecordingSid:target,CallSid:sid,RecordingStatus:"completed"});
+  const requests=vi.spyOn(globalThis,"fetch").mockResolvedValue(new Response(new TextEncoder().encode("recording")));
+  await recordingTasks(env,target);
+  expect(requests.mock.calls.some(([,init])=>init?.method==="DELETE")).toBe(false);
+  expect((await db.prepare("SELECT status FROM recordings WHERE sid=?").bind(target).first() as {status:string}).status).toBe("pending");
+ });
+ it("does not abandon Twilio cleanup after thirty failures and retries transient deletion immediately",async()=>{
+  const target="RE"+"e".repeat(32);const rec={sid:target,status:"archived",key:"simhub/recordings/test",created:Date.now(),twilioDeleted:false};
+  await db.prepare("INSERT INTO recordings(sid,value,status,updated,attempts) VALUES(?,?,'purge',?,31)").bind(target,JSON.stringify(rec),Date.now()-45000).run();
+  await db.prepare("UPDATE recordings SET lease='interrupted-worker' WHERE sid=?").bind(target).run();
+  const requests=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(new Response(null,{status:503})).mockResolvedValueOnce(new Response(null,{status:204}));
+  await recordingTasks(env,target);expect(requests).toHaveBeenCalledTimes(2);
+  const row=await db.prepare("SELECT status,value FROM recordings WHERE sid=?").bind(target).first() as {status:string,value:string};expect(row.status).toBe("archived");expect(JSON.parse(row.value).twilioDeleted).toBe(true);
  });
 });

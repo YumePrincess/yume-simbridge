@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27031"
+var Build = "27032"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -73,7 +73,10 @@ type engine struct {
 	wakeConnected                       atomic.Bool
 	wakeCh                              chan struct{}
 	wakeStamp                           int64
-	cloudSyncCount                      uint64
+	cloudSyncCount                      atomic.Uint64
+	healthMu                            sync.Mutex
+	healthBase                          map[string]any
+	callEventWake                       chan struct{}
 	callMu                              sync.Mutex
 	callID                              modem.CallID
 	callCancel                          context.CancelFunc
@@ -117,7 +120,7 @@ func main() {
 	if err = database.Migrate(ctx); err != nil {
 		fatal(err)
 	}
-	_, err = database.Exec(`CREATE TABLE IF NOT EXISTS edge_jobs (id TEXT PRIMARY KEY,status TEXT NOT NULL,result TEXT NOT NULL DEFAULT '',acked INTEGER NOT NULL DEFAULT 0);CREATE TABLE IF NOT EXISTS uploaded (id TEXT PRIMARY KEY);CREATE TABLE IF NOT EXISTS cloud_delivered (id TEXT PRIMARY KEY);CREATE TABLE IF NOT EXISTS edge_sms_owned (job_id TEXT PRIMARY KEY,message_id TEXT NOT NULL);`)
+	_, err = database.Exec(`CREATE TABLE IF NOT EXISTS edge_jobs (id TEXT PRIMARY KEY,status TEXT NOT NULL,result TEXT NOT NULL DEFAULT '',acked INTEGER NOT NULL DEFAULT 0);CREATE TABLE IF NOT EXISTS uploaded (id TEXT PRIMARY KEY);CREATE TABLE IF NOT EXISTS cloud_delivered (id TEXT PRIMARY KEY);CREATE TABLE IF NOT EXISTS edge_sms_owned (job_id TEXT PRIMARY KEY,message_id TEXT NOT NULL);CREATE TABLE IF NOT EXISTS edge_call_events (seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL,status TEXT NOT NULL);`)
 	if err != nil {
 		fatal(err)
 	}
@@ -139,7 +142,7 @@ func main() {
 	if err != nil {
 		slog.Warn("modem probe failed", "error", err)
 	}
-	e := &engine{wakeCh: make(chan struct{}, 1), rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
+	e := &engine{wakeCh: make(chan struct{}, 1), callEventWake: make(chan struct{}, 1), rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
 	e.voiceReady.Store(*rx != "" && *tx != "")
 	ua, err := sipgo.NewUA(sipgo.WithUserAgent("simhub"))
 	if err != nil {
@@ -157,6 +160,9 @@ func main() {
 	if err := e.dg.ServeBackground(serveCtx, e.outgoing); err != nil {
 		fatal(err)
 	}
+	go e.localProbeLoop(ctx)
+	go e.localHealthLoop(ctx)
+	go e.callEventLoop(ctx)
 	go e.cloudWakeLoop(ctx)
 	go e.voiceRecoveryLoop(ctx)
 	go e.modemEvents(ctx)
@@ -203,20 +209,11 @@ func (e *engine) api(ctx context.Context, path string, input, output any) error 
 	return nil
 }
 func (e *engine) sync(ctx context.Context) {
-	statusCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
-	status, err := e.modem.Status(statusCtx)
-	cancel()
-	if err != nil {
-		status.SIM = "unavailable"
-		status.Registration = "unknown"
-		slog.Warn("modem status unavailable")
-	}
 	var reply syncReply
-	connected := err == nil
-	voice := connected && e.voiceReady.Load() && audioHealthy(filepath.Join(e.healthDir, "audio-health.json"), time.Now())
-	health := map[string]any{"modemConnected": connected, "sim": status.SIM, "operator": status.Operator, "registration": status.Registration, "signal": status.Signal, "voiceReady": voice, "sipRegistered": e.registered.Load(), "busy": connected && e.busy.Load(), "version": Version + " (" + Build + ")", "updated": time.Now().UnixMilli(), "heartbeatSeconds": 30, "cloudSyncCount": e.cloudSyncCount, "cloudPushConnected": e.wakeConnected.Load()}
-	writeHealth(filepath.Join(e.healthDir, "edge-health.json"), health)
-	state := cloudSyncState{connected, voice, e.registered.Load(), connected && e.busy.Load(), string(status.SIM), string(status.Registration)}
+	health := e.healthSnapshot()
+	connected, _ := health["modemConnected"].(bool)
+	voice, _ := health["voiceReady"].(bool)
+	state := cloudSyncState{connected, voice, e.registered.Load(), e.callActive(), fmt.Sprint(health["sim"]), fmt.Sprint(health["registration"])}
 	wake := e.cloudWake.Swap(false)
 	if info, statErr := os.Stat(filepath.Join(e.healthDir, "cloud-wake")); statErr == nil && info.ModTime().UnixNano() != e.wakeStamp {
 		e.wakeStamp = info.ModTime().UnixNano()
@@ -228,10 +225,10 @@ func (e *engine) sync(ctx context.Context) {
 		}
 		return
 	}
-	claim := e.jobWake.Swap(false) || !e.wakeConnected.Load()
+	claim := !e.busy.Load() && (e.jobWake.Swap(false) || !e.wakeConnected.Load())
 	health["claimJobs"] = claim
-	e.cloudSyncCount++
-	err = e.api(ctx, "/edge/sync", health, &reply)
+	e.cloudSyncCount.Add(1)
+	err := e.api(ctx, "/edge/sync", health, &reply)
 	e.cloudPolicy.complete(time.Now(), state, err == nil, reply.Job != nil)
 	if err != nil {
 		if claim {
@@ -321,7 +318,7 @@ func (e *engine) inboxLoop(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		if !e.busy.Load() {
-			c, cancel := context.WithTimeout(ctx, 12*time.Second)
+			c, cancel := context.WithTimeout(ctx, 3*time.Second)
 			raws, _, err := e.modem.ListSMS(c, "")
 			if err == nil {
 				for _, raw := range raws {
@@ -444,18 +441,27 @@ func (e *engine) resetRoute() {
 		e.voiceReady.Store(true)
 	}
 }
-func (e *engine) finishCall(id modem.CallID) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+func (e *engine) finishCall(id modem.CallID, remote ...dialog) {
+	started := time.Now()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if len(remote) > 0 && remote[0] != nil {
+			hangup(remote[0])
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = e.modem.Hangup(ctx, id)
+	if err := e.modem.Hangup(ctx, id); err != nil {
+		slog.Warn("cellular hangup not confirmed", "error", err)
+	}
+	slog.Info("call teardown control complete", "elapsed_ms", time.Since(started).Milliseconds())
 	e.setCall("", nil)
+	e.voiceReady.Store(false)
+	e.signalCloudWake()
 	e.resetRoute()
 	e.busy.Store(false)
-}
-func (e *engine) callEvent(id, status string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_ = e.api(ctx, "/edge/call-event", map[string]string{"id": id, "status": status}, nil)
+	<-done
 }
 func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 	if !e.inbound.Load() || !e.registered.Load() || !e.voiceReady.Load() || !e.busy.CompareAndSwap(false, true) {
@@ -464,7 +470,11 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Hour)
 	defer cancel()
 	e.setCall(ev.CallID, cancel)
-	defer e.finishCall(ev.CallID)
+	slog.Info("cellular incoming event received")
+	var remote dialog
+	var finishOnce sync.Once
+	finish := func() { finishOnce.Do(func() { e.finishCall(ev.CallID, remote) }) }
+	defer finish()
 	var ticket struct {
 		ID         string `json:"id"`
 		AnswerMode string `json:"answerMode"`
@@ -505,26 +515,22 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 		var waitingOnce sync.Once
 		finishWaiting = func() { waitingOnce.Do(func() { stopWaiting(); <-waitingDone }) }
 		defer finishWaiting()
-		select {
-		case <-ctx.Done():
-			return
-		case <-introDone:
-		}
+		// Play the announcement while SIP forwarding starts, not before it.
 	}
 	c := e.getSIP()
 	var uri sip.Uri
 	if sip.ParseUri("sip:incoming@"+c.Domain, &uri) != nil {
 		return
 	}
+	slog.Info("SIP forwarding starting")
 	dialCtx, stop := context.WithTimeout(ctx, 150*time.Second)
 	d, med, err := e.dg.Invite(dialCtx, uri, diago.InviteOptions{Username: c.User, Password: c.Password, Headers: []sip.Header{sip.NewHeader("X-Bridge", ticket.ID)}})
 	stop()
 	if err != nil {
 		return
 	}
-	defer d.Close()
-	defer med.Close()
-	defer hangup(d)
+	remote = d
+	defer func() { finish(); _ = med.Close(); _ = d.Close() }()
 	stopRemoteWatch := context.AfterFunc(d.Context(), cancel)
 	defer stopRemoteWatch()
 	finishWaiting()
@@ -552,6 +558,8 @@ func (e *engine) incoming(parent context.Context, ev modem.ModemEvent) {
 			return
 		}
 	}
+	stopCallWatch := watchConnectedCall(ctx, cancel, func(check context.Context) (bool, error) { return e.modem.VoiceCallPresent(check, ev.CallID) })
+	defer stopCallWatch()
 	e.callEvent(ticket.ID, "connected")
 	_ = e.bridge(ctx, d.Context(), med, ev.CallID, nil)
 	callFinished = true
@@ -568,7 +576,7 @@ func (e *engine) outgoing(d *diago.DialogServerSession) {
 	var id modem.CallID
 	defer func() {
 		if id != "" {
-			e.finishCall(id)
+			e.finishCall(id, d)
 		} else {
 			e.busy.Store(false)
 		}
@@ -631,12 +639,13 @@ func (e *engine) outgoing(d *diago.DialogServerSession) {
 		e.callEvent(ticket, "failed")
 		return
 	}
+	stopCallWatch := watchConnectedCall(ctx, cancel, func(check context.Context) (bool, error) { return e.modem.VoiceCallPresent(check, id) })
+	defer stopCallWatch()
 	// Promote the SAME RTP session, preserving audio across 183 -> 200.
 	if err = d.AnswerEarlyMedia(med, diago.AnswerOptions{}); err != nil {
 		e.callEvent(ticket, "failed")
 		return
 	}
-	defer hangup(d)
 	e.callEvent(ticket, "connected")
 	<-bridgeDone
 	e.callEvent(ticket, "ended")
