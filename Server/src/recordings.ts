@@ -1,3 +1,4 @@
+import { recordingTicket } from "./recording-ticket";
 import { archive, audio, Recording } from "./recording-crypto";
 import { config } from "./config";
 import { now } from "./store";
@@ -152,7 +153,7 @@ export async function recordingAPI(
   path: string,
 ) {
   const m = path.match(
-    /^\/edge\/recordings\/(RE[a-f0-9]{32})(?:\/(audio|retry))?$/,
+    /^\/edge\/recordings\/(RE[a-f0-9]{32})(?:\/(audio|retry|ticket))?$/,
   );
   if (!m) fail("Not found", 404);
   const row = await env.DB.prepare(
@@ -162,6 +163,10 @@ export async function recordingAPI(
     .first<{ value: string; status: string }>();
   if (!row) fail("Not found", 404);
   const rec = JSON.parse(row.value) as Recording;
+  if (req.method === "POST" && m[2] === "ticket") {
+    if (!["archived","purge"].includes(row.status)) fail("Recording not archived yet",409);
+    return Response.json(await recordingTicket(env,m[1]));
+  }
   if (req.method === "GET" && m[2] === "audio") {
     if (!["archived", "purge"].includes(row.status))
       fail("Recording not archived yet", 409);

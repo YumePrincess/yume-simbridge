@@ -1,109 +1,108 @@
 'use strict';
 'require view';
 'require rpc';
-'require ui';
 'require poll';
-'require uci';
-
-// Use the LuCI CGI RPC endpoint, with a trailing route segment for single requests.
+'require ui';
+'require yume-simhub.qrcode as qr';
+'require yume-simhub.i18n as i18n';
 rpc.setBaseURL(L.url('admin/ubus') + '/');
-var status = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'status', expect: {} });
-var settings = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'settings', expect: {} });
-var configure = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'configure', params: ['token', 'enabled'], expect: {} });
-var save = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'save_settings', params: ['settings'], expect: {} });
-var switchDevice = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'switch', params: ['device'], expect: {} });
-var service = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'service', params: ['action'], expect: {} });
-function checked(result) {
-    if (result.error) throw new Error(result.error);
-    return result;
-}
-function perform(fn) {
-    return Promise.resolve().then(fn).then(checked).catch(function(error) {
-        ui.addNotification(null, E('p', {}, error.message), 'error');
-    });
-}
-function row(label, input) {
-    return E('div', { 'class': 'cbi-value' }, [
-        E('label', { 'class': 'cbi-value-title' }, label),
-        E('div', { 'class': 'cbi-value-field' }, [input])
-    ]);
-}
-function text(value, password) {
-    return E('input', { 'class': 'cbi-input-text', type: password ? 'password' : 'text', value: value || '', autocomplete: password ? 'new-password' : 'off' });
-}
-function flag(value) { var node=E('input', {type:'checkbox'}); node.checked=!!value; return node; }
+function call(method,params){return rpc.declare({object:'yume-simhub',method:method,params:params||[],nobatch:true,expect:{}});}
+var getStatus=call('status'),getSettings=call('settings'),configure=call('configure',['token','enabled']),saveSettings=call('save_settings',['settings']),switchDevice=call('switch',['device']),service=call('service',['action']),preferences=call('preferences',['language','appearance']),action=call('action',['operation','id','code','before']),selectModule=call('select_module',['location']);
+var LANGUAGES=[['zh-Hans','简体中文'],['zh-Hant','繁體中文'],['en','English'],['ja','日本語'],['fr','Français']];
+var PATHS={overview:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',inbox:'M4 4h16v13H9l-5 4V4zM8 8h8M8 12h6',activity:'M3 11a9 9 0 1 1 3 8M3 4v7h7M12 7v6l4 2',recordings:'M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4',routing:'M5 4v12a3 3 0 0 0 3 3h12M5 10h10a3 3 0 0 0 3-3V3M15 6l3-3 3 3M17 16l3 3-3 3',automation:'M14 2 5 13h6l-1 9 9-12h-6l1-8z',module:'M8 3h10v18H6V6l2-3zM10 11h5v6h-5z',settings:'M4 7h16M4 17h16M8 4v6M16 14v6',refresh:'M20 7a9 9 0 1 0 1 8M20 2v5h-5',power:'M12 2v10M6 5a9 9 0 1 0 12 0',cloud:'M6 18a5 5 0 1 1 1-10 6 6 0 0 1 11 1 4.5 4.5 0 0 1 0 9H6',signal:'M4 18v3M9 13v8M14 8v13M19 3v18'};
+function icon(name){var n=document.createElementNS('http://www.w3.org/2000/svg','svg');n.setAttribute('viewBox','0 0 24 24');n.setAttribute('aria-hidden','true');var p=document.createElementNS(n.namespaceURI,'path');p.setAttribute('d',PATHS[name]||PATHS.module);n.appendChild(p);return n;}
+function parsed(value){try{return typeof value==='string'?JSON.parse(value):value||{};}catch(_error){return {};}}
 return view.extend({
-    load: function() {
-        return Promise.all([status(), settings().catch(function() { return {}; }), uci.load('yume-simhub')]);
-    },
-    render: function(data) {
-        var state = data[0], config = data[1].settings || {}, inputs = {};
-        var summary = E('p');
-        var devices = E('div');
-        function update(value) {
-            var local = value.local || {}, runtime = value.runtime || {}, lease = runtime.lease || {};
-            summary.textContent = value.error || (local.runtimeState === 'standby' ? _('Standby: waiting for runtime ownership') :
-                _('Module') + ': ' + (local.modemConnected ? _('Connected') : _('Disconnected')) + ' · SIP: ' + (local.sipRegistered ? _('Registered') : _('Offline')) + ' · ' + (local.busy ? _('In call') : _('Idle')));
-            devices.replaceChildren();
-            (runtime.devices || []).forEach(function(device) {
-                var active = lease.owner === device.id && lease.expires > Date.now();
-                var button = E('button', { 'class': 'cbi-button', ...(active || local.busy ? {disabled:'disabled'} : {}),
-                    click: function() { perform(function() { return switchDevice(device.id); }); }
-                }, active ? _('Active') : _('Switch to this device'));
-                devices.appendChild(E('p', {}, [E('span', {}, device.label + ' (' + device.platform + ') '), button]));
-            });
-        }
-        update(state);
-        poll.add(function() { return status().then(update); }, 10);
-        var token = text('', true), enabled = flag(uci.get('yume-simhub', 'main', 'enabled') === '1');
-        var connection = E('div', { 'class': 'cbi-section' }, [
-            E('h3', {}, _('Connection')),
-            E('p', {}, _('Pair once using the same cloud client credential as the Mac app. Business settings are shared in the cloud database.')),
-            row(_('Client credential (leave blank to keep)'), token), row(_('Start automatically'), enabled),
-            E('button', { 'class': 'cbi-button cbi-button-apply', click: function() {
-                perform(function() { return configure(token.value, enabled.checked).then(function(r) { checked(r); token.value = ''; window.location.reload(); return r; }); });
-            } }, _('Save connection'))
-        ]);
-        function input(key, label, value, kind) {
-            var control = kind === 'flag' ? flag(value) : text(value, kind === 'secret');
-            inputs[key] = { control: control, kind: kind };
-            return row(label, control);
-        }
-        var language = E('select', { 'class': 'cbi-input-select' }, ['en','zh-Hans','zh-Hant','ja','fr'].map(function(lang) {
-            var option=E('option', {value:lang}, lang); option.selected=config.serviceLanguage===lang; return option;
-        }));
-        inputs.serviceLanguage = { control: language };
-        var shared = E('div', { 'class': 'cbi-section' }, [
-            E('h3', {}, _('Shared cloud settings')),
-            row(_('Telephone and notification language'), language),
-            input('inboundEnabled', _('Forward incoming calls'), config.inboundEnabled, 'flag'),
-            input('forwardTo', _('Forward to (E.164)'), config.forwardTo),
-            input('forwardConfirmEnabled', _('Press 1 to confirm forwarding'), config.forwardConfirmEnabled, 'flag'),
-            input('outboundEnabled', _('Enable SIP outbound calls'), config.outboundEnabled, 'flag'),
-            input('sipDomain', _('SIP domain'), config.sipDomain),
-            input('sipUser', _('SIP user'), config.sipUser),
-            input('sipPassword', _('SIP password (leave blank to keep)'), '', 'secret'),
-            input('gotifyUrl', _('Gotify URL'), config.gotifyUrl),
-            input('gotifyToken', _('Gotify token (leave blank to keep)'), '', 'secret'),
-            input('emailEnabled', _('Enable email to SMS'), config.emailEnabled, 'flag'),
-            input('allowedSenders', _('Allowed email senders (comma separated)'), (config.allowedSenders || []).join(', '), 'list'),
-            E('button', { 'class': 'cbi-button cbi-button-apply', ...(!state.configured || !data[1].settings ? {disabled:'disabled'} : {}), click: function() {
-                var values = {};
-                Object.keys(inputs).forEach(function(key) {
-                    var item = inputs[key], value = item.kind === 'flag' ? item.control.checked : item.control.value;
-                    if (item.kind === 'list') value = value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-                    if (item.kind !== 'secret' || value) values[key] = value;
-                });
-                perform(function() { return save(values).then(function(r) {
-                    checked(r); Object.keys(inputs).forEach(function(key) { if (inputs[key].kind === 'secret') inputs[key].control.value = ''; });
-                    ui.addNotification(null, E('p', {}, _('Cloud settings saved.')), 'info');return r;
-                }); });
-            } }, _('Save cloud settings'))
-        ]);
-        var history = E('details', {}, [E('summary', {}, _('Archived module call history'))].concat((data[1].moduleHistory || []).map(function(record) { return E('pre', {}, record.payload); })));
-        return E('div', {}, [history, E('h2', {}, 'Yume SIM Hub'), E('p', {}, (state.version || {}).version + ' · Build ' + (state.version || {}).build), summary, devices, connection, shared,
-            E('button', { 'class': 'cbi-button', click: function() { perform(function() { return service('restart'); }); } }, _('Restart service')),
-            E('button', { 'class': 'cbi-button', click: function() { perform(function() { return service('stop'); }); } }, _('Stop service'))]);
-    },
-    handleSaveApply: null, handleSave: null, handleReset: null
+ load:function(){return Promise.all([getStatus(),getSettings().catch(function(){return {};})]);},
+ render:function(data){
+  var state=data[0],cloud=data[1],draft={},page='overview',root,content,notice,title,sideStatus,sideDot,toolbar,bindings=[],fieldCounter=0;
+  var preference=state.preferences||{},uiLanguage=preference.language||'system',appearance=preference.appearance||'system',privateToken='',connectionEnabled=preference.enabled===true,lastCloudRefresh=Date.now(),preferenceQueue=Promise.resolve(),search='',selectedRecordings=new Set(),playingSID='',audio=E('audio',{controls:'controls',preload:'none'}),playerBox=E('div',{'class':'yh-player',hidden:'hidden'}),playerTitle=E('span');
+  function resolvedLanguage(){var value=uiLanguage==='system'?(document.documentElement.lang||navigator.language||'en'):uiLanguage;value=value.replace('_','-').toLowerCase();return value.startsWith('zh')?(/hant|tw|hk/.test(value)?'zh-Hant':'zh-Hans'):value.startsWith('fr')?'fr':value.startsWith('ja')?'ja':'en';}
+  function t(key){return i18n.translate(resolvedLanguage(),key);}
+  function checked(result){if(result&&result.error)throw new Error(result.error);return result;}
+  function persistPreferences(){var lang=uiLanguage,theme=appearance;preferenceQueue=preferenceQueue.catch(function(){}).then(function(){return preferences(lang,theme);}).then(checked).catch(function(error){show(error.message,true);});return preferenceQueue;}
+  function show(message,error){notice.hidden=false;notice.textContent=message;notice.setAttribute('role',error?'alert':'status');}
+  function button(label,fn,kind,name){var b=E('button',{type:'button','class':'yh-button '+(kind||''),click:function(){b.disabled=true;var original=b.textContent;b.textContent=t('Working…');Promise.resolve().then(fn).then(checked).catch(function(error){show(t('Operation failed')+' · '+error.message,true);}).finally(function(){b.disabled=false;b.replaceChildren();if(name)b.appendChild(icon(name));b.appendChild(document.createTextNode(original));});}},[name?icon(name):'',t(label)]);return b;}
+  function select(options,value,onChange,label){var control=E('select',{'aria-label':label,change:function(){onChange(control.value);}});options.forEach(function(item){control.appendChild(E('option',{value:item[0]},item[1]));});control.value=value;return control;}
+  function toggle(value,onChange,label){var control=E('button',{type:'button',role:'switch','class':'yh-switch','aria-label':t(label),'aria-checked':String(!!value),click:function(){value=!value;control.setAttribute('aria-checked',String(value));onChange(value);}},[E('span',{'class':'yh-switch-thumb'})]);return control;}
+  function manage(operation,id,code,before){return action(operation,id||'',code||'',before||'').then(checked);}
+  function ask(label,message,fn){return new Promise(function(resolve){ui.showModal(t(label),[E('p',{},t(message)),E('div',{'class':'right'},[E('button',{'class':'cbi-button',click:function(){ui.hideModal();resolve();}},t('Cancel')),E('button',{'class':'cbi-button cbi-button-negative',click:function(){ui.hideModal();resolve(Promise.resolve().then(fn));}},t(label))])]);});}
+  function removeHistory(inbox,id){return manage((id?'remove_':'clear_')+(inbox?'sms':'jobs'),id).then(refresh);}
+  function stopPlayback(){audio.pause();audio.removeAttribute('src');audio.load();playingSID='';playerBox.hidden=true;}
+  function recordingURL(sid,download){return manage('recording_ticket',sid).then(function(result){var value=download?result.downloadURL:result.url,u=new URL(value);if(u.origin!=='https://worker.example.com'||!u.pathname.startsWith('/recording/'))throw new Error('Invalid recording URL');return value;});}
+  function playRecording(record){if(playingSID===record.sid){stopPlayback();renderPage();return Promise.resolve();}return recordingURL(record.sid,false).then(function(url){stopPlayback();playingSID=record.sid;playerTitle.textContent=(record.peer||record.target||record.sid);playerBox.hidden=false;audio.src=url;renderPage();return audio.play().catch(function(){});});}
+  function downloadRecording(record){return recordingURL(record.sid,true).then(function(url){var link=E('a',{href:url,download:record.sid+'.mp3',rel:'noreferrer',referrerpolicy:'no-referrer'});root.appendChild(link);link.click();link.remove();});}
+  function deleteRecording(record){return ask('Delete recording','This permanently deletes the cloud recording and Twilio copy.',function(){if(playingSID===record.sid)stopPlayback();return manage('recording_delete',record.sid).then(refresh);});}
+  function clearRecordings(selected){return ask(selected?'Delete selected recordings':'Delete all recordings','Recordings will be permanently deleted, including Twilio copies. This cannot be undone.',function(){stopPlayback();var operation=selected?Promise.all(Array.from(selectedRecordings).map(function(sid){return manage('recording_delete',sid);})):manage('recordings_clear');return operation.then(function(){selectedRecordings.clear();return refresh();});});}
+  function setupTOTP(){return manage('totp_setup').then(function(enrollment){var code=E('input',{type:'text',inputmode:'numeric',autocomplete:'one-time-code',maxlength:6,'aria-label':t('One-time code')}),secret=E('code',{},enrollment.secret);ui.showModal(t('Set up authenticator'),[E('p',{},t('Scan the QR code or enter the secret in your authenticator.')),E('img',{src:qr.dataURL(enrollment.uri),alt:t('Authenticator QR code'),width:212,height:212}),E('p',{},secret),code,E('div',{'class':'right'},[E('button',{'class':'cbi-button',click:function(){code.value='';secret.textContent='';ui.hideModal();renderPage();}},t('Cancel')),E('button',{'class':'cbi-button cbi-button-apply',click:function(){manage('totp_confirm','',code.value).then(function(){code.value='';secret.textContent='';ui.hideModal();return refresh();}).catch(function(error){ui.addNotification(null,E('p',{},error.message),'error');});}},t('Confirm'))])]);});}
+  function searchBox(){var input=E('input',{type:'search',placeholder:t('Search'),'aria-label':t('Search'),value:search,input:function(){search=input.value;var focus=input.selectionStart;renderPage();var replacement=content.querySelector('input[type=search]');if(replacement){replacement.focus();replacement.setSelectionRange(focus,focus);}}});return input;}
+  function matches(item){return !search||JSON.stringify(item).toLocaleLowerCase().includes(search.toLocaleLowerCase());}
+  function routeRow(label,value,enabled){return E('div',{'class':'yh-route-row'},[E('span',{},t(label)),E('span',{'aria-hidden':'true'},'→'),E('strong',{},value),E('span',{'class':'yh-tag'},t(enabled?'Enabled':'Disabled'))]);}
+  function valueRow(label,value){return E('div',{'class':'yh-value-row'},[E('span',{},t(label)),E('span',{'class':'yh-tag'},value)]);}
+  function go(destination){page=destination;search='';renderPage();}
+  function card(label,children,name){return E('section',{'class':'yh-card'},[E('div',{'class':'yh-cardhead'},[E('h3',{},t(label)),name?icon(name):''])].concat(children));}
+  function note(key){return E('div',{'class':'yh-note'},t(key));}
+  function row(label,control,hint){var id='yh-field-'+(++fieldCounter);control.id=id;return E('div',{'class':'yh-row'},[E('label',{for:id},[t(label),hint?E('small',{},t(hint)):'']),control]);}
+  function field(key,label,kind,hint){var cfg=cloud.settings||{},value=key in draft?draft[key]:cfg[key],control;
+   if(kind==='flag'){control=toggle(!!value,function(v){draft[key]=v;},label);}
+   else if(kind==='language'){control=select(LANGUAGES,value||'en',function(v){draft[key]=v;},t(label));}
+   else if(kind==='answer'){control=select([['confirmed',t('Answer after confirmation')],['waiting',t('Answer with waiting audio')]],value||'confirmed',function(v){draft[key]=v;},t(label));}
+   else {if(kind==='list')value=Array.isArray(value)?value.join(', '):value;control=E('input',{type:kind==='secret'?'password':kind==='number'?'number':'text',value:kind==='secret'?(draft[key]||''):(value||''),autocomplete:kind==='secret'?'new-password':'off',input:function(){draft[key]=kind==='list'?control.value.split(',').map(function(v){return v.trim();}).filter(Boolean):kind==='number'?Number(control.value):control.value;}});}
+   return row(label,control,hint);
+  }
+  function saveBar(){var b=button('Save changes',function(){return saveSettings(draft).then(function(r){checked(r);cloud.settings=r;draft={};show(t('Saved'),false);renderPage();return r;});},'yh-primary');b.disabled=!cloud.settings;return E('div',{'class':'yh-savebar'},[E('small',{},t('Changes here also apply to the Mac app.')),b]);}
+  function date(value){return new Date(value).toLocaleString(resolvedLanguage(),{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
+  function table(headers,rows,empty){if(!rows.length)return E('div',{'class':'yh-empty'},t(empty));return E('div',{'class':'yh-tablewrap'},[E('table',{},[E('thead',{},[E('tr',{},headers.map(function(v){return E('th',{},t(v));}))]),E('tbody',{},rows.map(function(values){return E('tr',{},values.map(function(v){return E('td',{},v);}));}))])]);}
+  function messageRows(limit,actions){return (cloud.events||[]).filter(matches).slice(0,limit||30).map(function(item){var v=parsed(item.payload),row=[E('strong',{},v.from||'—'),E('div',{'class':'yh-message'},v.body||''),date(item.created)];if(actions)row.push(button('Delete',function(){return removeHistory(true,item.id);},'yh-danger'));return row;});}
+  function stat(label,key,name,detail){var value=E('div',{'class':'yh-stat'}),caption=E('p',{'class':'yh-caption'});bindings.push(function(){value.textContent=key();caption.textContent=detail();});return card(label,[value,caption],name);}
+  function currentStatus(){var h=state.local||{};return h.busy?'In call':h.runtimeState==='standby'?'Standby':h.modemConnected&&h.voiceReady&&h.sipRegistered?'Ready':state.running?'Connecting':'Stopped';}
+  function updateStatus(){sideStatus.textContent=t(currentStatus());sideDot.dataset.ready=String(currentStatus()==='Ready');bindings.forEach(function(fn){fn();});}
+  function deviceCard(){var runtime=state.runtime||{},lease=runtime.lease||{},devices=runtime.devices||[];return card('Runtime ownership',[E('p',{'class':'yh-muted'},t('One device at a time. Shared settings everywhere.'))].concat(devices.length?devices.map(function(device){var active=lease.owner===device.id&&lease.expires>Date.now(),b=button(active?'Active':'Use this device',function(){return switchDevice(device.id).then(function(result){checked(result);show(t('Saved'),false);return result;});},active?'':'yh-primary');b.disabled=active||!!(state.local||{}).busy;return E('div',{'class':'yh-device'},[E('div',{},[E('strong',{},device.label),E('small',{},device.platform==='openwrt'?'OpenWrt':'Mac')]),b]);}):[E('div',{'class':'yh-empty'},t('No paired devices'))]),'module');}
+  function archivedHistory(){return card('Archived module history',[(cloud.moduleHistory||[]).length?E('div',{},(cloud.moduleHistory||[]).map(function(record){var v=parsed(record.payload);return E('details',{'class':'yh-value-row'},[E('summary',{},v.storage+' · '+date(record.created)),E('pre',{},v.raw||record.payload)]);})):E('div',{'class':'yh-empty'},t('No archived module records'))],'activity');}
+  function connectionCard(){var credential=E('input',{type:'password',autocomplete:'new-password',value:privateToken,input:function(){privateToken=credential.value;}}),enabled=toggle(connectionEnabled,function(value){connectionEnabled=value;},'Start automatically');return card('Client connection',[row('Client credential',credential,'Leave blank to keep existing'),row('Start automatically',enabled),E('div',{'class':'yh-savebar'},[button('Save connection',function(){return configure(privateToken,connectionEnabled).then(function(result){checked(result);privateToken='';credential.value='';return refresh();});},'yh-primary')])],'module');}
+  var nav=[['overview','Overview','communication'],['inbox','SMS inbox','communication'],['activity','Activity','communication'],['recordings','Recordings','communication'],['routing','Telephone routing','management'],['automation','Message automation','management'],['module','Module & access','management'],['settings','App settings','management']];
+  function renderPage(){bindings=[];title.textContent=t(nav.find(function(n){return n[0]===page;})[1]);root.querySelectorAll('[data-page]').forEach(function(n){n.setAttribute('aria-current',n.dataset.page===page?'page':'false');});var cfg=cloud.settings||{},h=state.local||{},nodes=[];
+   if(page==='overview')nodes=[E('section',{'class':'yh-overview-intro'},[icon('signal'),E('div',{},[E('h2',{},t(currentStatus())),E('p',{'class':'yh-muted'},t('Module, calls and messages. One place.'))])]),E('div',{'class':'yh-health-grid'},[
+    stat('Module',function(){return t((state.local||{}).modemConnected?'Connected':'Offline');},'module',function(){return t((state.local||{}).sim==='ready'?'SIM ready':'Connecting');}),
+    stat('Audio',function(){return t((state.local||{}).voiceReady?'Audio ready':'Not ready');},'recordings',function(){return 'USB PCM';}),
+    stat('SIP',function(){return t((state.local||{}).sipRegistered?'Registered':'Offline');},'cloud',function(){return cfg.sipUser||'—';}),
+    stat('Call',function(){return t(!(state.local||{}).modemConnected?'Unavailable':(state.local||{}).busy?'In call':'Idle');},'routing',function(){return t('One device at a time');})]),
+    card('Telephone routing',[routeRow('SIM incoming calls',cfg.forwardTo||'—',cfg.inboundEnabled),routeRow('Twilio incoming calls',t('SIM calls after authentication'),cfg.outboundEnabled),E('p',{'class':'yh-caption'},t(cfg.incomingAnswerMode==='waiting'?'Answer with waiting audio':'Answer after confirmation')),E('div',{'class':'yh-savebar'},[button('Manage telephone routing',function(){go('routing');})])],'routing'),
+    E('div',{'class':'yh-grid'},[card('Message automation',[valueRow('Gotify notifications',t(cfg.gotifyConfigured?'Configured':'Not configured')),valueRow('Email to SMS',t(cfg.emailEnabled?'Enabled':'Disabled')),button('Manage message automation',function(){go('automation');})],'automation'),card('Current module',[E('strong',{},((state.modules||[]).find(function(m){return m.id===(state.preferences||{}).module_location;})||(state.modules||[])[0]||{}).label||t('Automatic selection (one module only)')),E('p',{'class':'yh-caption'},t('Device and audio use the same USB port.')),button('Manage module & access',function(){go('module');})],'module')]),
+    card('Recent activity',[(cloud.jobs||[]).length?E('div',{},(cloud.jobs||[]).slice(0,3).map(function(item){var v=parsed(item.payload);return E('div',{'class':'yh-recent'},[icon(item.kind==='sms'?'inbox':'routing'),E('div',{},[E('strong',{},t(item.kind)+' · '+(v.to||v.from||'—')),E('small',{},date(item.created))]),E('span',{'class':'yh-tag'},t(item.status))]);})):E('p',{'class':'yh-muted'},t('No activity yet')),E('div',{'class':'yh-savebar'},[button('View all activity',function(){go('activity');})])],'activity')];
+   if(page==='inbox')nodes=[E('div',{'class':'yh-list-tools'},[searchBox(),button('Retry pending notifications',function(){return manage('notify_retry').then(refresh);}),button('Clear list',function(){return removeHistory(true);},'yh-danger')]),note('Original numbers and message text are preserved.'),card('SMS inbox',[table(['Number','Content','Time','Actions'],messageRows(30,true),'No messages yet')],'inbox')];
+   if(page==='activity')nodes=[E('div',{'class':'yh-list-tools'},[searchBox(),button('Clear list',function(){return removeHistory(false);},'yh-danger')]),card('Activity',[table(['Type','Number','Status','Time','Actions'],(cloud.jobs||[]).filter(matches).map(function(item){var v=parsed(item.payload);return [t(item.kind),v.to||v.from||'—',E('div',{},[E('span',{'class':'yh-tag'},t(item.status)),E('small',{},item.result||'')]),date(item.created),button('Delete',function(){return removeHistory(false,item.id);},'yh-danger')];}),'No activity yet')],'activity')];
+   if(page==='recordings'){
+    var deleteSelected=button('Delete selected recordings',function(){return clearRecordings(true);},'yh-danger');deleteSelected.disabled=!selectedRecordings.size;
+    nodes=[E('div',{'class':'yh-list-tools'},[searchBox(),deleteSelected,button('Delete all recordings',function(){return clearRecordings(false);},'yh-danger')]),card('Recordings',[table(['Select','Number','Duration','Status','Time','Actions'],(cloud.recordings||[]).filter(matches).map(function(item){var selectBox=toggle(selectedRecordings.has(item.sid),function(value){if(value)selectedRecordings.add(item.sid);else selectedRecordings.delete(item.sid);deleteSelected.disabled=!selectedRecordings.size;},'Select recording');selectBox.setAttribute('role','checkbox');selectBox.classList.add('yh-check');var play=button(playingSID===item.sid?'Stop playback':'Play',function(){return playRecording(item);}),download=button('Download',function(){return downloadRecording(item);});play.disabled=download.disabled=!['archived','purge'].includes(item.status);return [selectBox,item.peer||item.target||'—',String(item.duration||0)+' s',t(item.status),date(item.created),E('div',{'class':'yh-actions'},[play,download,button('Retry archive',function(){return manage('recording_retry',item.sid).then(refresh);}),button('Delete',function(){return deleteRecording(item);},'yh-danger')])];}),'No recordings yet'),button('Load more',function(){var list=cloud.recordings||[],last=list[list.length-1];if(!last)return;return manage('recordings_more','','',String(last.created)).then(function(result){var ids=new Set(list.map(function(r){return r.sid;}));cloud.recordings=list.concat((result.recordings||[]).filter(function(r){return !ids.has(r.sid);}));renderPage();});})],'recordings')];
+   }
+   if(page==='routing'){
+    var auth=draft.authMode||cfg.authMode||'password';
+    nodes=[note('Changes here also apply to the Mac app.'),card('Incoming calls',[field('inboundEnabled','Forward incoming calls','flag'),field('forwardTo','Forward to'),field('incomingAnswerMode','Answer mode','answer'),field('forwardConfirmEnabled','Press 1 to confirm','flag'),field('forwardConfirmSeconds','Confirmation timeout (seconds)','number')],'routing'),card('Outgoing calls',[field('outboundEnabled','Enable outgoing calls','flag'),row('Telephone authentication',select([['password',t('PIN mode')],['totp',t('Authenticator mode')]],auth,function(value){if(value==='totp'&&!cfg.totpConfigured){setupTOTP().catch(function(error){show(error.message,true);});renderPage();}else{draft.authMode=value;renderPage();}},t('Telephone authentication'))),auth==='totp'?button('Reset authenticator',setupTOTP):field('pin','Telephone PIN','secret','Leave blank to keep existing')],'routing'),saveBar()];
+   }
+   if(page==='automation')nodes=[note('Changes here also apply to the Mac app.'),card('Gotify notifications',[field('gotifyUrl','Gotify URL'),field('gotifyToken','Gotify token','secret','Leave blank to keep existing'),button('Send test notification',function(){return manage('notify_test').then(function(result){show(t(result.delivered?'Saved':'Operation failed'),!result.delivered);return result;});})],'automation'),card('Email to SMS',[field('emailEnabled','Enable email to SMS','flag'),valueRow('Email address','sms@example.com'),E('p',{'class':'yh-caption'},t('Email subject: target number. Plain text body: SMS content.')),field('allowedSenders','Allowed senders','list','Separate addresses with commas')],'inbox'),card('Cloud service language',[field('serviceLanguage','Cloud service language','language','Controls voice prompts and notification descriptions. SMS text stays original.')],'cloud'),saveBar()];
+   if(page==='module'){
+    var modulePicker=select([['',t('Automatic selection (one module only)')]].concat((state.modules||[]).map(function(module){return [module.id,module.label];})),(state.preferences||{}).module_location||'',function(value){selectModule(value).then(checked).then(refresh).catch(function(error){show(error.message,true);});},t('Module'));modulePicker.disabled=!!state.running;
+    nodes=[deviceCard(),card('Module',[row('Module',modulePicker,'Stop service before changing modules'),valueRow('Module',t(h.modemConnected?'Connected':'Disconnected')),valueRow('Audio',t(h.voiceReady?'Audio ready':'Not ready')),valueRow('SIP',t(h.sipRegistered?'Registered':'Offline'))],'module'),card('SIP registration',[valueRow('Cloud connection','worker.example.com'),field('twilioToken','Twilio Auth Token','secret','Leave blank to keep existing'),field('sipDomain','SIP domain'),field('sipUser','SIP user'),field('sipPassword','SIP password','secret','Leave blank to keep existing')],'routing'),saveBar(),button('Restart service',function(){return service('restart').then(checked).then(refresh);},'', 'refresh')];
+   }
+   if(page==='settings')nodes=[card('App settings',[
+    row('Interface language',select([['system',t('Follow system')]].concat(LANGUAGES),uiLanguage,function(value){uiLanguage=value;build();return persistPreferences();},t('Interface language')),'Interface preferences only affect this LuCI app.'),
+    row('Appearance',select([['system',t('Follow system')],['light',t('Light')],['dark',t('Dark')]],appearance,function(value){appearance=value;root.dataset.appearance=value;persistPreferences();},t('Appearance'))),
+    E('div',{'class':'yh-value-row'},[E('span',{},'Yume SIM Hub'),E('span',{},(state.version||{}).version+' · Build '+(state.version||{}).build)])],'settings'),card('Install & updates',[E('p',{'class':'yh-muted'},t('Mac uses the signed update ZIP; OpenWrt uses the matching IPK.')),E('div',{'class':'yh-actions'},[E('a',{'class':'yh-button',href:'https://github.com/YumePrincess/yume-simhub/releases',target:'_blank',rel:'noreferrer'},t('Open downloads')),E('a',{'class':'yh-button',href:L.url('admin/system/opkg')},t('Open package manager'))])],'settings'),connectionCard(),card('About',[E('img',{src:L.resource('yume-simhub/logo.png'),alt:'',width:64,height:64}),E('h3',{},'Yume SIM Hub'),E('p',{'class':'yh-muted'},(state.version||{}).version+' · Build '+(state.version||{}).build),E('small',{},'OpenWrt · ARM64')],'module'),card('Data protection',[E('p',{'class':'yh-muted'},t('SMS is cleared from the module only after cloud delivery is confirmed.'))],'cloud'),card('Runtime log',[E('pre',{id:'yh-runtime-log'},''),button('Refresh log',function(){return manage('logs').then(function(result){content.querySelector('#yh-runtime-log').textContent=result.log||t('No activity yet');});}),button('Clear local log',function(){return manage('logs_clear').then(function(){content.querySelector('#yh-runtime-log').textContent='';});},'yh-danger')],'activity')];
+   content.replaceChildren();nodes.forEach(function(node){content.appendChild(node);});updateStatus();
+  }
+  function refresh(){return Promise.all([getStatus(),getSettings()]).then(function(results){state=checked(results[0]);cloud=checked(results[1]);build();});}
+  function build(){if(playerBox.querySelector('button'))playerBox.querySelector('button').textContent=t('Stop playback');root=E('div',{id:'yumehub','data-appearance':appearance,lang:resolvedLanguage()});notice=E('div',{'class':'yh-notice',hidden:'hidden'});title=E('h1');sideStatus=E('span');sideDot=E('span',{'class':'yh-dot'});content=E('div',{'class':'yh-content'});var menu=E('nav',{'class':'yh-nav','aria-label':'Yume SIM Hub'});
+   ['communication','management'].forEach(function(group){menu.appendChild(E('div',{'class':'yh-nav-title'},t(group==='communication'?'Communication':'Management')));nav.filter(function(n){return n[2]===group;}).forEach(function(item){menu.appendChild(E('button',{type:'button','data-page':item[0],click:function(){go(item[0]);}},[icon(item[0]),t(item[1])]));});});
+   toolbar=E('div',{'class':'yh-actions'},[button('Refresh',refresh,'','refresh'),button(state.running?'Stop service':'Start service',function(){return service(state.running?'stop':'start').then(checked).then(refresh);},state.running?'yh-danger':'yh-primary','power')]);
+   root.appendChild(E('div',{'class':'yh-shell'},[E('aside',{'class':'yh-sidebar'},[E('div',{'class':'yh-brand'},[E('img',{src:L.resource('yume-simhub/logo.png'),alt:'',width:42,height:42}),E('div',{},[E('strong',{},'Yume SIM Hub'),E('small',{},t('OpenWrt cellular hub'))])]),menu,E('div',{'class':'yh-sidefoot'},[E('div',{},[sideDot,sideStatus]),E('small',{},(state.version||{}).version+' · Build '+(state.version||{}).build)])]),E('main',{'class':'yh-main'},[E('header',{'class':'yh-toolbar'},[E('div',{},[title,E('p',{},'GL.iNet · OpenWrt')]),toolbar]),notice,content,playerBox])]));
+   if(shell) shell.replaceChildren(root);renderPage();
+  }
+  audio.addEventListener('ended',function(){playingSID='';renderPage();});
+  playerBox.appendChild(playerTitle);playerBox.appendChild(audio);playerBox.appendChild(button('Stop playback',function(){stopPlayback();}));
+  var stylesheet=E('link',{rel:'stylesheet',href:L.resource('yume-simhub/style.css')}),shell=E('div');build();
+  poll.add(function(){return getStatus().then(function(result){state=checked(result);updateStatus();if(!document.hidden&&Date.now()-lastCloudRefresh>60000&&!Object.keys(draft).length&&!privateToken&&!root.contains(document.activeElement)){lastCloudRefresh=Date.now();return getSettings().then(function(value){cloud=checked(value);renderPage();});}}).catch(function(){show(t('Reconnecting'),true);});},10);
+  return E('div',{},[stylesheet,shell]);
+ },
+ handleSaveApply:null,handleSave:null,handleReset:null
 });

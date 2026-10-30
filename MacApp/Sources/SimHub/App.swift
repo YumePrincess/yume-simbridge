@@ -6,7 +6,7 @@ import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct Settings: Codable {
+struct Settings: Codable, Equatable {
   var serviceLanguage: String? = "en"
   var authMode: String? = "password"
   var totpConfigured: Bool? = false
@@ -56,7 +56,11 @@ struct Record: Codable, Identifiable {
     (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: String] ?? [:]
   }
 }
+struct RuntimeDevice: Codable, Identifiable { var id: String; var platform: String; var label: String }
+struct RuntimeOwner: Codable { var owner: String; var expires: Double; var desired: String }
+struct RuntimeSnapshot: Codable { var lease: RuntimeOwner?; var devices: [RuntimeDevice] }
 struct Snapshot: Codable {
+  var runtime: RuntimeSnapshot?
   var settings: Settings
   var edge: Edge
   var jobs: [Record]
@@ -133,6 +137,11 @@ struct Bootstrap: Codable {
   @Published var edge = Edge()
   @Published var messages: [Record] = []
   @Published var jobs: [Record] = []
+  @Published var runtimeDevices: [RuntimeDevice] = []
+  @Published var runtimeOwner = ""
+  @Published var runtimeBusy = false
+  private var cloudSettingsBaseline: Settings?
+
   @Published var running = false
   @Published var notice = ""
   @Published var pin = ""
@@ -195,7 +204,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27026")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27027")"
   }
   @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
   func openReleasePage() {
@@ -338,11 +347,16 @@ struct Bootstrap: Codable {
       stateRefreshAfter = now.addingTimeInterval(60)
       do {
         let s = try JSONDecoder().decode(Snapshot.self, from: await request("/edge/state"))
-        if !loaded {
+        if !loaded || cloudSettingsBaseline.map({ settings == $0 }) == true {
+          let unchangedSenders = cloudSettingsBaseline.map { senderText == $0.allowedSenders.joined(separator: "\n") } ?? true
           settings = s.settings
-          senderText = s.settings.allowedSenders.joined(separator: "\n")
+          if unchangedSenders { senderText = s.settings.allowedSenders.joined(separator: "\n") }
+          cloudSettingsBaseline = s.settings
           loaded = true
         }
+        runtimeDevices = s.runtime?.devices ?? []
+        runtimeOwner = (s.runtime?.lease?.expires ?? 0) > Date().timeIntervalSince1970 * 1000 ? (s.runtime?.lease?.owner ?? "") : ""
+        runtimeBusy = s.edge.busy == true
         edge = s.edge
         messages = s.events
         jobs = s.jobs
@@ -374,12 +388,20 @@ struct Bootstrap: Codable {
       v["sipPassword"] = sipPassword
       settings = try JSONDecoder().decode(
         Settings.self, from: await request("/edge/settings", method: "PUT", body: v))
+      cloudSettingsBaseline = settings
       pin = ""
       gotifyToken = ""
       twilioToken = ""
       sipPassword = ""
       wakeRuntime()
       notice = L("配置已保存")
+      await refresh()
+    } catch { notice = error.localizedDescription }
+  }
+  func selectRuntimeDevice(_ id: String) async {
+    do {
+      _ = try await request("/edge/runtime/select", method: "POST", body: ["device": id])
+      notice = L("正在切换运行设备")
       await refresh()
     } catch { notice = error.localizedDescription }
   }

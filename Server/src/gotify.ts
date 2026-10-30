@@ -1,11 +1,11 @@
 import { prompt } from "./languages";
 import { config } from "./config";
-export async function notify(env: Env) {
+export async function notify(env: Env, eventID?: string) {
   const c = await config(env);
   if (!c.gotifyToken) return;
   const rows = await env.DB.prepare(
-    "SELECT id,kind,payload FROM events WHERE kind IN ('sms.received','call.incoming','system.test') AND notified=0 AND attempts<20 ORDER BY created LIMIT 10",
-  ).all<{ id: string; kind: string; payload: string }>();
+    "SELECT id,kind,payload FROM events WHERE kind IN ('sms.received','call.incoming','system.test') AND notified=0 AND attempts<20 AND (? IS NULL OR id=?) ORDER BY created LIMIT 10",
+  ).bind(eventID ?? null,eventID ?? null).all<{ id: string; kind: string; payload: string }>();
   for (const row of rows.results) {
     // Claim one delivery; abandoned claims return to pending after five minutes.
     const lock = await env.DB.prepare(

@@ -25,6 +25,10 @@ os.umask(0o077)
 children=[]
 stopping=False
 lease=None
+if sys.platform=='linux':
+    fd=os.open(data/'runtime.log',os.O_CREAT|os.O_WRONLY|os.O_APPEND,0o600)
+    os.dup2(fd,1);os.dup2(fd,2);os.close(fd)
+
 
 def publish_offline():
     status={'modemConnected':False,'voiceReady':False,'sipRegistered':False,'busy':False,'sim':'unavailable'}
@@ -146,6 +150,13 @@ def health(name):
     except (OSError,ValueError):return {}
 try:
     while not stopping:
+        if sys.platform=='linux':
+            logfile=data/'runtime.log'
+            try:
+                if logfile.stat().st_size>1048576:
+                    with logfile.open('r+b') as stream:
+                        stream.seek(-262144,2);tail=stream.read();stream.seek(0);stream.write(tail);stream.truncate()
+            except OSError:pass
         if module_select.find_module(usb_backend.backend) is None:
             print('USB module disconnected; restarting runtime',flush=True)
             break

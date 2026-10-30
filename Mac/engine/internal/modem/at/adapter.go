@@ -23,6 +23,7 @@ import (
 // provided by the selected VoiceAudio backend while this type owns calls,
 // SMS, and line state.
 type Adapter struct {
+	smsMu  sync.Mutex
 	client *Client
 	mu     sync.Mutex
 	active modem.CallID
@@ -252,6 +253,8 @@ func (a *Adapter) SendDTMF(ctx context.Context, callID modem.CallID, digit rune)
 }
 
 func (a *Adapter) SendSMS(ctx context.Context, destination string, payload modem.SMSPayload) (modem.SMSID, error) {
+	a.smsMu.Lock()
+	defer a.smsMu.Unlock()
 	destination = strings.TrimSpace(destination)
 	// 短号 + 纯 GSM7 正文走文本模式：模块原生支持，少一次 PDU 编解码。
 	// 含中文等非 GSM7 字符时必须落到 PDU 分支——文本模式配 AT+CSCS="GSM"
@@ -294,6 +297,8 @@ func (a *Adapter) SendSMS(ctx context.Context, destination string, payload modem
 }
 
 func (a *Adapter) ListSMS(ctx context.Context, cursor modem.SMSCursor) ([]modem.RawSMS, modem.SMSCursor, error) {
+	a.smsMu.Lock()
+	defer a.smsMu.Unlock()
 	// Explicitly select the modem's message storage ("MT" = module phone
 	// memory). Without this, CMGL lists the *current preferred* storage
 	// (often SM/SR on QDC507), which is empty because inbound SMS lands
@@ -325,7 +330,11 @@ func (a *Adapter) ListSMS(ctx context.Context, cursor modem.SMSCursor) ([]modem.
 			}
 			// 与上面的 AT+CPMS="MT" 保持一致：这里列出的确实是 MT 存储。
 			// 原先把存储名写死为 "SM"，入库后会误导排查。
-			current = &modem.RawSMS{ModemStorage: "MT", ModemIndex: index}
+			status := -1
+			if len(fields) > 1 {
+				status, _ = strconv.Atoi(strings.TrimSpace(fields[1]))
+			}
+			current = &modem.RawSMS{ModemStorage: "MT", ModemIndex: index, StorageStatus: status}
 			lastIndex = strconv.Itoa(index)
 			continue
 		}
@@ -342,6 +351,8 @@ func (a *Adapter) ListSMS(ctx context.Context, cursor modem.SMSCursor) ([]modem.
 }
 
 func (a *Adapter) DeleteSMS(ctx context.Context, storageIndex string) error {
+	a.smsMu.Lock()
+	defer a.smsMu.Unlock()
 	// CMGD without an explicit storage deletes from the *current
 	// preferred* storage; pin it to MT (same reason as ListSMS) so
 	// engine.go's post-ingest cleanup actually removes the message.

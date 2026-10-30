@@ -1,3 +1,4 @@
+import { recordingFromTicket } from "./recording-ticket";
 import { archiveModuleHistory } from "./module-history";
 import { seedSMSReceipts, smsEventID, smsFingerprint } from "./sms-receipts";
 import { runtimeAPI, runtimeState, requireRuntime } from "./runtime-lease";
@@ -94,6 +95,7 @@ async function edgeAPI(
     ]);
     return json({
       settings: publicConfig(c),
+      runtime: await runtimeState(env),
       edge: e,
       jobs: jobs.results,
       events: events.results,
@@ -185,9 +187,10 @@ async function edgeAPI(
       from: v.from.slice(0, 64),
       body: v.body,
     });
-    ctx.waitUntil(notify(env));
+    await notify(env,eventID);
+    const notificationRequired=!!(await config(env)).gotifyToken;
     const receipt=await env.DB.prepare("SELECT notified FROM events WHERE id=?").bind(eventID).first<{notified:number}>();
-    return json({ stored:true, delivered:receipt?.notified===1 });
+    return json({ stored:true, delivered:receipt?.notified===1, cleanupAllowed:receipt?.notified===1 || !notificationRequired });
   }
   if (path === "/edge/incoming") {
     const c = await config(env);
@@ -265,6 +268,13 @@ export default {
       const u = new URL(req.url);
       const path = u.pathname;
       if (u.origin !== env.PUBLIC_ORIGIN) fail("Invalid origin", 400);
+      if (path.startsWith("/recording/") && req.method==="GET") {
+        const sid=await recordingFromTicket(env,path.slice("/recording/".length));
+        const headers=new Headers();if(req.headers.has("Range"))headers.set("Range",req.headers.get("Range")!);
+        const response=await recordingAPI(new Request(env.PUBLIC_ORIGIN+"/edge/recordings/"+sid+"/audio"+(u.searchParams.has("download")?"?download":""),{headers}),env,ctx,"/edge/recordings/"+sid+"/audio");
+        const h=new Headers(response.headers);h.set("Referrer-Policy","no-referrer");h.set("Cache-Control","private, no-store");h.set("Content-Security-Policy","default-src 'none'; media-src 'self'; sandbox");
+        return new Response(response.body,{status:response.status,headers:h});
+      }
       if (path.startsWith("/twilio/")) {
         if (req.method !== "POST") fail("Method not allowed", 405);
         return await voice(req, env, ctx);

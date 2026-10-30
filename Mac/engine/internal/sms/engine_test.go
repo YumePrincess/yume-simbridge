@@ -39,11 +39,8 @@ func TestEngineIngestsAndDeduplicatesPDU(t *testing.T) {
 	database := openTestDB(t)
 	engine := NewEngine(database, nil)
 	engine.Now = func() time.Time { return time.Unix(100, 0) }
-	segments, err := EncodeSubmitSegments("10086", "hello", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := hex.DecodeString(segments[0].PDU)
+	// Actual SMS-DELIVER fixture, with SCTS; SMS-SUBMIT is an outbox record.
+	raw, err := hex.DecodeString("000005810180F600006201030000000005E8329BFD06")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,4 +88,18 @@ type uncertainSMSModem struct{}
 
 func (uncertainSMSModem) SendSMS(context.Context, string, modem.SMSPayload) (modem.SMSID, error) {
 	return "", errors.Join(modem.ErrSMSSubmissionUnknown, errors.New("serial response timed out after Ctrl-Z"))
+}
+
+func TestOutboxSubmitIsNotAnIncomingNotification(t *testing.T) {
+	database := openTestDB(t)
+	engine := NewEngine(database, nil)
+	parts, err := EncodeSubmitSegments("10086", "hello", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := hex.DecodeString(parts[0].PDU)
+	message, err := engine.Ingest(context.Background(), modem.RawSMS{RawPDU: raw, StorageStatus: 3})
+	if err != nil || message != nil {
+		t.Fatalf("outbox was ingested as incoming: %v %v", message, err)
+	}
 }

@@ -11,6 +11,8 @@ import (
 
 // Never delete by a remembered slot alone: it might now hold a different SMS.
 func (a *Adapter) DeleteSMSIfMatches(ctx context.Context, index int, expected []byte) error {
+	a.smsMu.Lock()
+	defer a.smsMu.Unlock()
 	if index < 0 || len(expected) == 0 {
 		return errors.New("invalid SMS cleanup identity")
 	}

@@ -146,3 +146,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
     result TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS sms_outbound_parts (message_id TEXT NOT NULL, pdu TEXT NOT NULL, PRIMARY KEY(message_id,pdu));

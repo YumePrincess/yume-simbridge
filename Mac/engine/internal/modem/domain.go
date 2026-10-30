@@ -104,6 +104,7 @@ type SMSPayload struct {
 }
 
 type RawSMS struct {
+	StorageStatus   int
 	ModemStorage    string
 	ModemIndex      int
 	Sender          string

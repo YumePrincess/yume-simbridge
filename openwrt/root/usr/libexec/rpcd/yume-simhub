@@ -2,6 +2,7 @@
 """Narrow rpcd interface. No shell commands or caller-controlled cloud paths."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -11,7 +12,7 @@ sys.dont_write_bytecode=True
 os.umask(0o077)
 BASE=Path('/etc/yume-simhub')
 BOOT=BASE/'bootstrap.json'
-METHODS={'status':{},'configure':{'token':'','enabled':True},'settings':{},'save_settings':{'settings':{}},'switch':{'device':''},'service':{'action':''}}
+METHODS={'status':{},'configure':{'token':'','enabled':True},'settings':{},'save_settings':{'settings':{}},'switch':{'device':''},'service':{'action':''},'preferences':{'language':'','appearance':''},'action':{'operation':'','id':'','code':'','before':''},'select_module':{'location':''}}
 
 def cloud(path, body=None, method=None):
     cfg=json.loads(BOOT.read_text())
@@ -43,6 +44,58 @@ def execute(method, v):
         subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
         service('enable' if enabled else 'disable');service('restart' if enabled else 'stop')
         return {'ok':True}
+    if method=='select_module':
+        service_state=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simhub"}'],timeout=2))
+        if any(item.get('running') for item in service_state.get('yume-simhub',{}).get('instances',{}).values()):raise ValueError('Stop service before changing modules')
+        location=v.get('location','')
+        if not isinstance(location,str) or (location and not re.fullmatch(r'[0-9]{1,10}',location)):raise ValueError('Invalid physical module selection')
+        subprocess.run(['/sbin/uci','set','yume-simhub.main.module_location='+location],check=True)
+        subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
+        return {'ok':True}
+    if method=='action':
+        operation=v.get('operation');identity=v.get('id','')
+        if not isinstance(identity,str) or len(identity)>256:raise ValueError('Invalid record identity')
+        if operation in ('remove_sms','remove_jobs','clear_sms','clear_jobs'):
+            from urllib.parse import quote
+            kind='sms' if operation.endswith('sms') else 'jobs'
+            path='/edge/history/'+kind
+            if operation.startswith('remove_'):
+                if not identity:raise ValueError('Missing record identity')
+                path+='/'+quote(identity,safe='')
+            return cloud(path,method='DELETE')
+        if operation in ('recording_delete','recording_retry','recording_ticket'):
+            if not re.fullmatch(r'RE[a-f0-9]{32}',identity):raise ValueError('Invalid recording')
+            suffix='' if operation=='recording_delete' else '/'+operation.split('_',1)[1]
+            return cloud('/edge/recordings/'+identity+suffix,{} if suffix else None,'POST' if suffix else 'DELETE')
+        if operation=='recordings_clear':return cloud('/edge/recordings',method='DELETE')
+        if operation=='recordings_more':
+            before=str(v.get('before',''))
+            if not re.fullmatch(r'[0-9]{1,16}',before):raise ValueError('Invalid recording cursor')
+            return {'recordings':cloud('/edge/recordings?before='+before)}
+        if operation=='notify_retry':return cloud('/edge/notify-retry',{})
+        if operation=='notify_test':return cloud('/edge/notify-test',{})
+        if operation=='logs':
+            path=Path('/tmp/yume-simhub/runtime.log')
+            if not path.exists():return {'log':''}
+            with path.open('rb') as stream:
+                stream.seek(max(0,path.stat().st_size-18000));return {'log':stream.read(18000).decode(errors='replace')}
+        if operation=='logs_clear':
+            path=Path('/tmp/yume-simhub/runtime.log')
+            if path.exists():path.write_text('')
+            return {'ok':True}
+        if operation=='totp_setup':return cloud('/edge/totp/setup',{})
+        if operation=='totp_confirm':
+            code=v.get('code','')
+            if not re.fullmatch(r'[0-9]{6}',code):raise ValueError('Invalid one-time code')
+            return cloud('/edge/totp/confirm',{'code':code})
+        raise ValueError('Unknown operation')
+    if method=='preferences':
+        language=v.get('language');appearance=v.get('appearance')
+        if language not in ('system','en','fr','ja','zh-Hans','zh-Hant') or appearance not in ('system','light','dark'):raise ValueError('Invalid interface preferences')
+        for key,value in [('ui_language',language),('appearance',appearance)]:
+            subprocess.run(['/sbin/uci','set','yume-simhub.main.'+key+'='+value],check=True)
+        subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
+        return {'ok':True}
     if method=='status':
         result={'configured':BOOT.exists(),'local':{},'runtime':{},'error':'','version':json.loads(Path('/usr/lib/yume-simhub/version.json').read_text())}
         try:result['local']=json.loads(Path('/tmp/yume-simhub/edge-health.json').read_text())
@@ -50,10 +103,30 @@ def execute(method, v):
         if BOOT.exists():
             try:result['runtime']=cloud('/edge/runtime/state')
             except Exception:result['error']='Cloud runtime API unavailable; check connection and deployed server version'
+        def preference(key,default):
+            value=subprocess.run(['/sbin/uci','-q','get','yume-simhub.main.'+key],capture_output=True,text=True,timeout=2)
+            return value.stdout.strip() if value.returncode==0 else default
+        result['preferences']={'module_location':preference('module_location',''),'language':preference('ui_language','system'),'appearance':preference('appearance','system'),'enabled':preference('enabled','0')=='1'}
+        try:
+            service_state=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simhub"}'],timeout=2))
+            result['running']=any(item.get('running') for item in service_state.get('yume-simhub',{}).get('instances',{}).values())
+        except Exception:result['running']=False
+        result['modules']=[]
+        try:
+            sys.path.insert(0,'/usr/lib/yume-simhub/tools')
+            import usb.core,usb_backend,module_select
+            for vendor,product in module_select.IDS:
+                for device in usb.core.find(find_all=True,idVendor=vendor,idProduct=product,backend=usb_backend.backend):
+                    result['modules'].append({'id':str(module_select.usb_location(device)),'label':'DJI QDC507 · USB '+str(device.bus)+'-'+'.'.join(str(p) for p in device.port_numbers)})
+        except Exception:pass
         identity=BASE/'device-id'
         if identity.exists():result['device']=identity.read_text().strip()
         return result
-    if method=='settings':return cloud('/edge/state')
+    if method=='settings':
+        result=cloud('/edge/state')
+        try:result['recordings']=cloud('/edge/recordings')
+        except Exception:result['recordings']=[]
+        return result
     if method=='save_settings':
         value=v.get('settings')
         if not isinstance(value,dict):raise ValueError('Invalid settings')
@@ -71,6 +144,8 @@ if __name__=='__main__':
             if len(data)>16384:raise ValueError('Request too large')
             print(json.dumps(execute(sys.argv[2],json.loads(data or b'{}'))))
         except urllib.error.HTTPError as error:
-            print(json.dumps({'error':'Cloud request rejected (HTTP %s)'%error.code}))
+            try:message=json.loads(error.read(4096)).get('error','')
+            except Exception:message=''
+            print(json.dumps({'error':message or 'Cloud request rejected (HTTP %s)'%error.code}))
         except Exception:
             print(json.dumps({'error':'Operation failed; verify settings, dependencies and service state'}))

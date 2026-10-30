@@ -1381,3 +1381,28 @@ describe("cross-device SMS receipts",()=>{
   expect(db.db.prepare("SELECT count(*) AS n FROM events").get()).toMatchObject({n:0});
  });
 });
+
+describe("LuCI scoped recording playback",()=>{
+ it("issues a short-lived link without the client credential and preserves byte ranges",async()=>{
+  const sid="RE"+"7".repeat(32),iv=randomBytes(12).toString("base64"),plain=new TextEncoder().encode("test recording audio bytes");
+  const cipher=await cryptChunk(env,sid,iv,0,plain);
+  const recording={sid,status:"archived",key:"simhub/recordings/test.mp3.enc",iv,size:plain.length,created:Date.now(),duration:1};
+  db.db.prepare("INSERT INTO recordings(sid,value,status,updated) VALUES(?,?,'archived',?)").run(sid,JSON.stringify(recording),Date.now());
+  env.RECORDINGS={get:async()=>({body:new ReadableStream({start(controller){controller.enqueue(cipher);controller.close();}})})} as unknown as R2Bucket;
+  const ticket=await (await edge("/edge/recordings/"+sid+"/ticket",{})).json() as {url:string,downloadURL:string};
+  expect(ticket.url).not.toContain(env.EDGE_TOKEN);
+  const response=await worker.fetch!(new Request(ticket.url,{headers:{Range:"bytes=5-13"}}),env,ctx);
+  expect(response.status).toBe(206);
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(plain.slice(5,14));
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+  expect((await worker.fetch!(new Request(ticket.url+"tampered"),env,ctx)).status).toBe(403);
+  db.db.exec("UPDATE recordings SET status='deleting'");
+  expect((await worker.fetch!(new Request(ticket.url),env,ctx)).status).toBe(409);
+ });
+ it("rejects expired playback links",async()=>{
+  const {recordingTicket}=await import("../src/recording-ticket");
+  const ticket=await recordingTicket(env,"RE"+"8".repeat(32));
+  vi.useFakeTimers();vi.setSystemTime(Date.now()+301000);
+  try{expect((await worker.fetch!(new Request(ticket.url),env,ctx)).status).toBe(403);}finally{vi.useRealTimers();}
+ });
+});

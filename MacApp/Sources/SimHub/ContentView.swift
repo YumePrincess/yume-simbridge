@@ -319,6 +319,19 @@ struct Content: View {
   private var modulePage: some View {
     Form {
       Section { pageIntro("模块与接入", subtitle: "选择设备，并管理 Twilio 连接。", symbol: "simcard") }
+      Section(L("运行设备")) {
+        Text(L("同一时间仅一个设备运行，配置始终一致。")).font(.caption).foregroundStyle(.secondary)
+        ForEach(model.runtimeDevices) { device in
+          LabeledContent(device.label) {
+            if model.runtimeOwner == device.id {
+              Text(L("当前运行")).foregroundStyle(.green)
+            } else {
+              Button(L("切换到此设备")) { Task { await model.selectRuntimeDevice(device.id) } }
+                .disabled(model.runtimeBusy)
+            }
+          }
+        }
+      }
       Section(L("模块选择")) {
         Picker(L("启用的 DJI 模块"), selection: $model.selectedModule) {
           Text(L("自动选择（仅连接一个模块时）")).tag("")

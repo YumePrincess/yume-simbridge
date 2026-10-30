@@ -50,6 +50,9 @@ func (e *Engine) Ingest(ctx context.Context, raw modem.RawSMS) (*db.Message, err
 	if err != nil {
 		return nil, err
 	}
+	if decoded.Submitted {
+		return nil, nil
+	}
 	receivedAt := e.Now()
 	segmentID, err := id.New("seg_", 16)
 	if err != nil {
@@ -155,6 +158,11 @@ func (e *Engine) Send(ctx context.Context, to, body string) (*db.Message, error)
 	}
 	message.SyncSeq = sequence
 
+	for _, segment := range segments {
+		if _, err = e.Database.ExecContext(ctx, "INSERT INTO sms_outbound_parts(message_id,pdu) VALUES(?,?)", messageID, segment.PDU); err != nil {
+			return &message, err
+		}
+	}
 	for _, segment := range segments {
 		_, sendErr := e.Modem.SendSMS(ctx, to, modem.SMSPayload{Body: segment.Body, Encoding: string(segment.Encoding), PDU: segment.PDU, PartNo: segment.PartNo, Total: segment.Total})
 		if sendErr != nil {

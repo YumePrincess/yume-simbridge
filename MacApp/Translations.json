@@ -1564,5 +1564,35 @@
     "fr": "À propos",
     "ja": "このアプリについて",
     "zh-Hant": "關於"
+  },
+  "运行设备": {
+    "en": "Runtime device",
+    "fr": "Appareil actif",
+    "ja": "実行デバイス",
+    "zh-Hant": "執行裝置"
+  },
+  "同一时间仅一个设备运行，配置始终一致。": {
+    "en": "One device at a time. Shared settings everywhere.",
+    "fr": "Un seul appareil actif, les mêmes réglages partout.",
+    "ja": "実行は常に 1 台。設定はどこでも共通。",
+    "zh-Hant": "同一時間僅一個裝置執行，設定始終一致。"
+  },
+  "当前运行": {
+    "en": "Active",
+    "fr": "Actif",
+    "ja": "実行中",
+    "zh-Hant": "目前執行"
+  },
+  "切换到此设备": {
+    "en": "Use this device",
+    "fr": "Utiliser cet appareil",
+    "ja": "このデバイスに切替",
+    "zh-Hant": "切換至此裝置"
+  },
+  "正在切换运行设备": {
+    "en": "Switching the active device",
+    "fr": "Changement d’appareil actif",
+    "ja": "実行デバイスを切替中",
+    "zh-Hant": "正在切換執行裝置"
   }
 }

@@ -24,6 +24,7 @@ type SubmitSegment struct {
 }
 
 type DecodedMessage struct {
+	Submitted   bool
 	Sender      string
 	Body        string
 	Encoding    Encoding
@@ -347,6 +348,7 @@ func DecodePDU(pdu string) (DecodedMessage, error) {
 	offset++
 	message := DecodedMessage{}
 	if firstOctet&0x03 == 0x01 { // SMS-SUBMIT: TP-MR follows.
+		message.Submitted = true
 		if offset >= len(data) {
 			return DecodedMessage{}, ErrInvalidPDU
 		}
