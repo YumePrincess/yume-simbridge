@@ -28,7 +28,7 @@
 #yumehub a.yh-button{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;min-height:34px;border:1px solid var(--line);background:var(--panel);color:var(--accent);border-radius:9px;text-decoration:none;font-size:12px}
 
 /* Layout follows the app's available width, including embedded LuCI columns. */
-#yumehub{width:100%;max-width:100%;min-width:0;container: yh-app / inline-size}
+#yumehub{display:grid;width:100%;max-width:100%;min-width:0;container: yh-app / inline-size}
 #yumehub .yh-shell,#yumehub .yh-sidebar,#yumehub .yh-nav,#yumehub .yh-content,#yumehub .yh-toolbar>div{min-width:0;max-width:100%}
 #yumehub .yh-main{container: yh-main / inline-size}
 #yumehub .yh-mobile-nav{display:none}
@@ -62,7 +62,7 @@
 #yumehub .yh-list-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:18px;border-top:1px solid var(--line);margin-top:8px}
 #yumehub .yh-record>.yh-check{flex-shrink:0;margin-top:10px}
 @container yh-app (max-width:800px){
- #yumehub .yh-shell{grid-template-columns:minmax(0,1fr)}
+ #yumehub .yh-shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
  #yumehub .yh-sidebar{padding:16px;border-right:0;border-bottom:1px solid var(--line)}
  #yumehub .yh-brand{padding:0 0 14px}
  #yumehub .yh-nav,#yumehub .yh-sidefoot{display:none}
