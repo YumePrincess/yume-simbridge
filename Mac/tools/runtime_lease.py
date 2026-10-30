@@ -24,9 +24,9 @@ class RuntimeLease:
         self.done = threading.Event()
 
     def request(self, operation, **extra):
-        body = dict(device=self.device, session=self.session, epoch=self.epoch, **extra)
+        body = dict(protocolVersion=2, device=self.device, session=self.session, epoch=self.epoch, **extra)
         request = urllib.request.Request(self.config['origin']+'/edge/runtime/'+operation,
-            data=json.dumps(body).encode(), headers={'Authorization':'Bearer '+self.config['token'], 'Content-Type':'application/json'})
+            data=json.dumps(body).encode(), headers={'Authorization':'Bearer '+self.config['token'], 'Content-Type':'application/json', 'User-Agent':'YumeSIMHub/27.2.0'})
         with urllib.request.urlopen(request, timeout=4) as response:
             return json.loads(response.read(16384))
 
@@ -34,6 +34,9 @@ class RuntimeLease:
         started = time.monotonic()
         reply = self.request('acquire', platform='openwrt' if os.uname().sysname == 'Linux' else 'macos', label=os.uname().nodename)
         self.epoch = reply['epoch']
+        if reply.get('protocolVersion') != 2:
+            self.request('release')
+            raise RuntimeError('Cloud runtime protocol update required')
         self.deadline = started + 65
         os.environ.update(SIMHUB_LEASE_DEVICE=self.device, SIMHUB_LEASE_SESSION=self.session, SIMHUB_LEASE_EPOCH=str(self.epoch))
 

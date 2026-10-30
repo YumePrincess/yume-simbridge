@@ -1,3 +1,5 @@
+import { archiveModuleHistory } from "./module-history";
+import { seedSMSReceipts, smsEventID, smsFingerprint } from "./sms-receipts";
 import { runtimeAPI, runtimeState, requireRuntime } from "./runtime-lease";
 import { removeHistory } from "./history";
 export { WakeHub } from "./wake-hub";
@@ -41,7 +43,7 @@ async function edgeAPI(
   if (path === "/edge/runtime/state" && req.method === "GET") return json(await runtimeState(env));
   if (path.startsWith("/edge/runtime/") && req.method === "POST")
     return json(await runtimeAPI(env, path, await body(req)));
-  if (["/edge/wake", "/edge/sync", "/edge/result", "/edge/sms", "/edge/incoming", "/edge/incoming-ready", "/edge/authorize", "/edge/call-event"].includes(path))
+  if (["/edge/module-history", "/edge/wake", "/edge/sync", "/edge/result", "/edge/sms", "/edge/incoming", "/edge/incoming-ready", "/edge/authorize", "/edge/call-event"].includes(path))
     await requireRuntime(req, env);
   if (path === "/edge/wake" && req.method === "GET")
     return env.WAKE_HUB.getByName("module").fetch(req);
@@ -95,6 +97,7 @@ async function edgeAPI(
       edge: e,
       jobs: jobs.results,
       events: events.results,
+      moduleHistory: (await env.DB.prepare("SELECT payload,created FROM module_call_history ORDER BY created DESC LIMIT 30").all()).results,
     });
   }
   if (path === "/edge/settings" && req.method === "PUT") {
@@ -125,6 +128,8 @@ async function edgeAPI(
   }
   if (req.method !== "POST") fail("Method not allowed", 405);
   const v = await body(req);
+  if (path === "/edge/module-history") return json(await archiveModuleHistory(env,v.entries));
+  if (path === "/edge/sms-known") return json(await seedSMSReceipts(env,v.receipts));
   if (path === "/edge/sync") {
     const status = {
       modemConnected: v.modemConnected === true,
@@ -175,12 +180,14 @@ async function edgeAPI(
       v.body.length > 4096
     )
       fail("Invalid SMS");
-    await event(env, "sms-" + v.id, "sms.received", {
+    const eventID=await smsEventID(env,smsFingerprint(v.fingerprint));
+    await event(env, eventID, "sms.received", {
       from: v.from.slice(0, 64),
       body: v.body,
     });
     ctx.waitUntil(notify(env));
-    return json({ ok: true });
+    const receipt=await env.DB.prepare("SELECT notified FROM events WHERE id=?").bind(eventID).first<{notified:number}>();
+    return json({ stored:true, delivered:receipt?.notified===1 });
   }
   if (path === "/edge/incoming") {
     const c = await config(env);

@@ -32,7 +32,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27023"
+var Build = "27024"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -117,7 +117,7 @@ func main() {
 	if err = database.Migrate(ctx); err != nil {
 		fatal(err)
 	}
-	_, err = database.Exec(`CREATE TABLE IF NOT EXISTS edge_jobs (id TEXT PRIMARY KEY,status TEXT NOT NULL,result TEXT NOT NULL DEFAULT '',acked INTEGER NOT NULL DEFAULT 0);CREATE TABLE IF NOT EXISTS uploaded (id TEXT PRIMARY KEY);`)
+	_, err = database.Exec(`CREATE TABLE IF NOT EXISTS edge_jobs (id TEXT PRIMARY KEY,status TEXT NOT NULL,result TEXT NOT NULL DEFAULT '',acked INTEGER NOT NULL DEFAULT 0);CREATE TABLE IF NOT EXISTS uploaded (id TEXT PRIMARY KEY);CREATE TABLE IF NOT EXISTS cloud_delivered (id TEXT PRIMARY KEY);`)
 	if err != nil {
 		fatal(err)
 	}
@@ -313,6 +313,13 @@ func (e *engine) inboxLoop(ctx context.Context) {
 			raws, _, err := e.modem.ListSMS(c, "")
 			if err == nil {
 				for _, raw := range raws {
+					// Clear only this exact PDU after durable cloud delivery.
+					if e.smsDelivered(c, raw.RawPDU) {
+						if err = e.modem.DeleteSMSIfMatches(c, raw.ModemIndex, raw.RawPDU); err != nil {
+							slog.Warn("SMS cleanup deferred")
+						}
+						continue
+					}
 					if _, err = e.sms.Ingest(c, raw); err != nil {
 						slog.Warn("SMS decode deferred", "error", err)
 					}
@@ -320,10 +327,11 @@ func (e *engine) inboxLoop(ctx context.Context) {
 			}
 			cancel()
 			var pending int
-			if e.database.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE direction='inbound' AND id NOT IN (SELECT id FROM uploaded)").Scan(&pending) == nil && pending > 0 {
+			if e.database.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE direction='inbound' AND id NOT IN (SELECT id FROM cloud_delivered)").Scan(&pending) == nil && pending > 0 {
 				e.cloudWake.Store(true)
 			}
 		}
+		e.cleanModuleHistory(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -332,7 +340,7 @@ func (e *engine) inboxLoop(ctx context.Context) {
 	}
 }
 func (e *engine) uploadMessages(ctx context.Context) {
-	rows, err := e.database.QueryContext(ctx, "SELECT id,peer,body FROM messages WHERE direction='inbound' AND id NOT IN (SELECT id FROM uploaded) LIMIT 10")
+	rows, err := e.database.QueryContext(ctx, "SELECT id,peer,body FROM messages WHERE direction='inbound' AND id NOT IN (SELECT id FROM cloud_delivered) LIMIT 10")
 	if err != nil {
 		return
 	}
@@ -346,8 +354,27 @@ func (e *engine) uploadMessages(ctx context.Context) {
 	}
 	rows.Close()
 	for _, m := range items {
-		if e.api(ctx, "/edge/sms", map[string]string{"id": m.ID, "from": m.From, "body": m.Body}, nil) == nil {
-			_, _ = e.database.ExecContext(ctx, "INSERT OR IGNORE INTO uploaded(id) VALUES(?)", m.ID)
+		hashes, hashErr := e.database.QueryContext(ctx, "SELECT pdu_hash FROM sms_segments WHERE message_id=? ORDER BY pdu_hash", m.ID)
+		if hashErr != nil {
+			continue
+		}
+		parts := []string{}
+		for hashes.Next() {
+			var hash string
+			if hashes.Scan(&hash) == nil {
+				parts = append(parts, hash)
+			}
+		}
+		hashes.Close()
+		if len(parts) == 0 {
+			continue
+		}
+		fingerprint := smsReceiptFingerprint(parts)
+		var receipt struct {
+			Delivered bool `json:"delivered"`
+		}
+		if e.api(ctx, "/edge/sms", map[string]string{"id": m.ID, "from": m.From, "body": m.Body, "fingerprint": fingerprint}, &receipt) == nil && receipt.Delivered {
+			_, _ = e.database.ExecContext(ctx, "INSERT OR IGNORE INTO cloud_delivered(id) VALUES(?)", m.ID)
 		}
 	}
 }

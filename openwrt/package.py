@@ -23,7 +23,7 @@ Architecture: aarch64_cortex-a53_neon-vfpv4
 Maintainer: Yume SIM Hub
 Section: luci
 Priority: optional
-Depends: libc, luci-base, rpcd, python3-light, python3-logging, python3-urllib, python3-ctypes, python3-openssl, libusb-1.0-0, alsa-utils, kmod-usb-audio, ca-bundle
+Depends: libc, luci-base, rpcd, python3-light, python3-codecs, python3-logging, python3-uuid, python3-urllib, python3-ctypes, python3-openssl, libusb-1.0-0, alsa-utils, kmod-usb-audio, ca-bundle
 Description: Yume SIM Hub LuCI UI and ARM64 SMS/SIP gateway
 '''
 postinst='''#!/bin/sh
@@ -32,6 +32,10 @@ mkdir -p /etc/yume-simhub
 chmod 700 /etc/yume-simhub
 rm -f /tmp/luci-indexcache
 /etc/init.d/rpcd restart
+if [ "$(uci -q get yume-simhub.main.enabled)" = 1 ]; then
+ /etc/init.d/yume-simhub enable
+ /etc/init.d/yume-simhub start
+fi
 exit 0
 '''
 prerm='''#!/bin/sh

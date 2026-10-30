@@ -10,7 +10,7 @@ mkdir -p "$STAGE/root/usr/lib/yume-simhub/bin" "$STAGE/root/usr/lib/yume-simhub/
 cp -R openwrt/root/. "$STAGE/root/"
 cp version.json "$STAGE/root/usr/lib/yume-simhub/version.json"
 cp Mac/supervisor.py "$STAGE/root/usr/lib/yume-simhub/"
-for name in at_pty_bridge.py module_select.py usb_backend.py adb_server.py voice_runtime.py reset_route.py runtime_health.py runtime_lease.py linux_audio_bridge.py; do
+for name in at_pty_bridge.py module_select.py usb_backend.py adb_server.py voice_runtime.py reset_route.py runtime_health.py runtime_lease.py owned_exec.py linux_audio_bridge.py; do
     cp "Mac/tools/$name" "$STAGE/root/usr/lib/yume-simhub/tools/"
 done
 # PyUSB is pure Python; bundle the pinned package rather than depending on pip
@@ -45,5 +45,10 @@ cp openwrt/install.sh "$STAGE/install.sh"
 (cd "$STAGE" && tar -czf ../yume-simhub-openwrt-arm64.tar.gz root install.sh)
 (cd dist && shasum -a 256 yume-simhub-openwrt-arm64.tar.gz > yume-simhub-openwrt-arm64.sha256)
 python3 openwrt/package.py
-(cd dist && shasum -a 256 luci-app-yume-simhub_*.ipk >> yume-simhub-openwrt-arm64.sha256)
+python3 - <<'PYHASH'
+import hashlib,json,pathlib
+v=json.loads(pathlib.Path('version.json').read_text())
+p=pathlib.Path('dist')/f"luci-app-yume-simhub_{v['version']}-{v['build']}_aarch64_cortex-a53_neon-vfpv4.ipk"
+with pathlib.Path('dist/yume-simhub-openwrt-arm64.sha256').open('a') as out:out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n')
+PYHASH
 echo "Built dist/yume-simhub-openwrt-arm64.tar.gz"

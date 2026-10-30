@@ -19,7 +19,7 @@ class LeaseTests(unittest.TestCase):
         self.assertNotEqual(other.session,self.lease.session)
         self.assertEqual((Path(self.temp.name)/'device-id').stat().st_mode & 0o777,0o600)
     def test_acquire_uses_request_start_to_allow_shutdown_before_server_expiry(self):
-        with patch.object(self.lease,'request',return_value={'epoch':7}),patch('runtime_lease.time.monotonic',return_value=100),patch.dict(os.environ):
+        with patch.object(self.lease,'request',return_value={'epoch':7,'protocolVersion':2}),patch('runtime_lease.time.monotonic',return_value=100),patch.dict(os.environ):
             self.lease.acquire()
             self.assertEqual(self.lease.deadline,165)
             self.assertEqual(os.environ['SIMHUB_LEASE_EPOCH'],'7')

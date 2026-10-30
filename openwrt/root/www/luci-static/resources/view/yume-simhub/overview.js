@@ -5,12 +5,14 @@
 'require poll';
 'require uci';
 
-var status = rpc.declare({ object: 'yume-simhub', method: 'status', expect: {} });
-var settings = rpc.declare({ object: 'yume-simhub', method: 'settings', expect: {} });
-var configure = rpc.declare({ object: 'yume-simhub', method: 'configure', params: ['token', 'enabled'], expect: {} });
-var save = rpc.declare({ object: 'yume-simhub', method: 'save_settings', params: ['settings'], expect: {} });
-var switchDevice = rpc.declare({ object: 'yume-simhub', method: 'switch', params: ['device'], expect: {} });
-var service = rpc.declare({ object: 'yume-simhub', method: 'service', params: ['action'], expect: {} });
+// Use the LuCI CGI RPC endpoint, with a trailing route segment for single requests.
+rpc.setBaseURL(L.url('admin/ubus') + '/');
+var status = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'status', expect: {} });
+var settings = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'settings', expect: {} });
+var configure = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'configure', params: ['token', 'enabled'], expect: {} });
+var save = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'save_settings', params: ['settings'], expect: {} });
+var switchDevice = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'switch', params: ['device'], expect: {} });
+var service = rpc.declare({ object: 'yume-simhub', nobatch: true, method: 'service', params: ['action'], expect: {} });
 function checked(result) {
     if (result.error) throw new Error(result.error);
     return result;
@@ -29,7 +31,7 @@ function row(label, input) {
 function text(value, password) {
     return E('input', { 'class': 'cbi-input-text', type: password ? 'password' : 'text', value: value || '', autocomplete: password ? 'new-password' : 'off' });
 }
-function flag(value) { return E('input', { type: 'checkbox', checked: !!value }); }
+function flag(value) { var node=E('input', {type:'checkbox'}); node.checked=!!value; return node; }
 return view.extend({
     load: function() {
         return Promise.all([status(), settings().catch(function() { return {}; }), uci.load('yume-simhub')]);
@@ -45,7 +47,7 @@ return view.extend({
             devices.replaceChildren();
             (runtime.devices || []).forEach(function(device) {
                 var active = lease.owner === device.id && lease.expires > Date.now();
-                var button = E('button', { 'class': 'cbi-button', disabled: active || local.busy,
+                var button = E('button', { 'class': 'cbi-button', ...(active || local.busy ? {disabled:'disabled'} : {}),
                     click: function() { perform(function() { return switchDevice(device.id); }); }
                 }, active ? _('Active') : _('Switch to this device'));
                 devices.appendChild(E('p', {}, [E('span', {}, device.label + ' (' + device.platform + ') '), button]));
@@ -68,7 +70,7 @@ return view.extend({
             return row(label, control);
         }
         var language = E('select', { 'class': 'cbi-input-select' }, ['en','zh-Hans','zh-Hant','ja','fr'].map(function(lang) {
-            return E('option', { value: lang, selected: config.serviceLanguage === lang }, lang);
+            var option=E('option', {value:lang}, lang); option.selected=config.serviceLanguage===lang; return option;
         }));
         inputs.serviceLanguage = { control: language };
         var shared = E('div', { 'class': 'cbi-section' }, [
@@ -85,7 +87,7 @@ return view.extend({
             input('gotifyToken', _('Gotify token (leave blank to keep)'), '', 'secret'),
             input('emailEnabled', _('Enable email to SMS'), config.emailEnabled, 'flag'),
             input('allowedSenders', _('Allowed email senders (comma separated)'), (config.allowedSenders || []).join(', '), 'list'),
-            E('button', { 'class': 'cbi-button cbi-button-apply', disabled: !state.configured || !data[1].settings, click: function() {
+            E('button', { 'class': 'cbi-button cbi-button-apply', ...(!state.configured || !data[1].settings ? {disabled:'disabled'} : {}), click: function() {
                 var values = {};
                 Object.keys(inputs).forEach(function(key) {
                     var item = inputs[key], value = item.kind === 'flag' ? item.control.checked : item.control.value;
@@ -98,7 +100,8 @@ return view.extend({
                 }); });
             } }, _('Save cloud settings'))
         ]);
-        return E('div', {}, [E('h2', {}, 'Yume SIM Hub'), E('p', {}, (state.version || {}).version + ' · Build ' + (state.version || {}).build), summary, devices, connection, shared,
+        var history = E('details', {}, [E('summary', {}, _('Archived module call history'))].concat((data[1].moduleHistory || []).map(function(record) { return E('pre', {}, record.payload); })));
+        return E('div', {}, [history, E('h2', {}, 'Yume SIM Hub'), E('p', {}, (state.version || {}).version + ' · Build ' + (state.version || {}).build), summary, devices, connection, shared,
             E('button', { 'class': 'cbi-button', click: function() { perform(function() { return service('restart'); }); } }, _('Restart service')),
             E('button', { 'class': 'cbi-button', click: function() { perform(function() { return service('stop'); }); } }, _('Stop service'))]);
     },

@@ -19,6 +19,8 @@ class DB {
   constructor() {
     this.db.exec(readFileSync("migrations/0001.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0008_runtime_lease.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0009_sms_receipts.sql", "utf8"));
+    this.db.exec(readFileSync("migrations/0010_module_history.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0002_recordings.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0003_notifications.sql", "utf8"));
     this.db.exec(readFileSync("migrations/0004_totp.sql", "utf8"));
@@ -74,7 +76,7 @@ beforeEach(async () => {
   ctx = {
     waitUntil: (p: Promise<unknown>) => pending.push(p),
   } as unknown as ExecutionContext;
-  await runtimeAPI(env,"/edge/runtime/acquire",{device:"test-macos-device-0001",session:"test-session-id-00001",platform:"macos"});
+  await runtimeAPI(env,"/edge/runtime/acquire",{device:"test-macos-device-0001",session:"test-session-id-00001",platform:"macos",protocolVersion:2});
   await saveConfig(env, {
     ...defaults,
     twilioToken: "test-token",
@@ -117,6 +119,7 @@ async function edge(
   data?: unknown,
   method = data ? "POST" : "GET",
 ) {
+  if (path === "/edge/sms" && data && typeof data === "object" && !("fingerprint" in data)) data={...data,fingerprint: "a".repeat(64)};
   return worker.fetch!(
     new Request(env.PUBLIC_ORIGIN + path, {
       method,
@@ -1319,7 +1322,7 @@ describe("low-request push and history management", () => {
 });
 
 describe("exclusive runtime ownership", () => {
- const router={device:"test-openwrt-device-01",session:"test-router-session-01",platform:"openwrt"};
+ const router={device:"test-openwrt-device-01",session:"test-router-session-01",platform:"openwrt",protocolVersion:2};
  it("rejects legacy clients before overwriting health or claiming jobs", async()=>{
   const response=await worker.fetch!(new Request(env.PUBLIC_ORIGIN+"/edge/sync",{method:"POST",headers:{Authorization:"Bearer "+env.EDGE_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({modemConnected:true})}),env,ctx);
   expect(response.status).toBe(409);
@@ -1352,5 +1355,29 @@ describe("exclusive runtime ownership", () => {
  it("never leaks session secrets in the management state",async()=>{
   const response=await edge("/edge/runtime/state");
   expect(await response.text()).not.toContain("test-session-id-00001");
+ });
+});
+
+describe("cross-device SMS receipts",()=>{
+ it("maps a fresh router ID to an already delivered Mac PDU",async()=>{
+  const id="msg_"+"1".repeat(32),fingerprint="b".repeat(64);
+  db.db.prepare("INSERT INTO events(id,kind,payload,created,notified) VALUES(?,?,?,?,1)").run("sms-"+id,"sms.received",JSON.stringify({from:"95555",body:"original"}),Date.now()-86400000);
+  expect((await edge("/edge/sms-known",{receipts:[{id,fingerprint}]})).status).toBe(200);
+  const response=await edge("/edge/sms",{id:"new-router-local-id",from:"95555",body:"original",fingerprint});
+  expect(await response.json()).toMatchObject({stored:true,delivered:true});
+  expect(db.db.prepare("SELECT count(*) AS n FROM events WHERE kind='sms.received'").get()).toMatchObject({n:1});
+ });
+ it("deduplicates cross-device resubmission without suppressing a new PDU",async()=>{
+  await edge("/edge/sms",{id:"mac-id",from:"95555",body:"same",fingerprint:"c".repeat(64)});
+  await edge("/edge/sms",{id:"router-id",from:"95555",body:"same",fingerprint:"c".repeat(64)});
+  await edge("/edge/sms",{id:"another-sms",from:"95555",body:"same",fingerprint:"d".repeat(64)});
+  expect(db.db.prepare("SELECT count(*) AS n FROM events WHERE kind='sms.received'").get()).toMatchObject({n:2});
+ });
+ it("archives module phone records idempotently and never notifies Gotify",async()=>{
+  const entries=[{storage:"RC",index:1,raw:'+CPBR: 1,"95555",129,""'}];
+  expect((await edge("/edge/module-history",{entries})).status).toBe(200);
+  await edge("/edge/module-history",{entries});
+  expect(db.db.prepare("SELECT count(*) AS n FROM module_call_history").get()).toMatchObject({n:1});
+  expect(db.db.prepare("SELECT count(*) AS n FROM events").get()).toMatchObject({n:0});
  });
 });

@@ -16,7 +16,7 @@ METHODS={'status':{},'configure':{'token':'','enabled':True},'settings':{},'save
 def cloud(path, body=None, method=None):
     cfg=json.loads(BOOT.read_text())
     req=urllib.request.Request('https://worker.example.com'+path,data=json.dumps(body).encode() if body is not None else None,
-        method=method,headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json'})
+        method=method,headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'})
     with urllib.request.urlopen(req,timeout=8) as response:
         return json.loads(response.read(262144))
 
@@ -34,7 +34,7 @@ def execute(method, v):
             cfg['token']=token
         if not cfg.get('token'):raise ValueError('Client credential required')
         # Verify before replacing working credentials.
-        req=urllib.request.Request(cfg['origin']+'/edge/state',headers={'Authorization':'Bearer '+cfg['token']})
+        req=urllib.request.Request(cfg['origin']+'/edge/state',headers={'Authorization':'Bearer '+cfg['token'],'User-Agent':'YumeSIMHub/27.2.0'})
         with urllib.request.urlopen(req,timeout=8) as response:response.read(262144)
         temp=BOOT.with_suffix('.tmp');temp.write_text(json.dumps(cfg));os.chmod(temp,0o600);temp.replace(BOOT)
         enabled=v.get('enabled')

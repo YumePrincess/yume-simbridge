@@ -61,6 +61,8 @@ signal.signal(signal.SIGTERM,stop)
 signal.signal(signal.SIGINT,stop)
 
 def start(command,**kw):
+    if sys.platform == 'linux':
+        command=[sys.executable,'-s','-B',str(root/'tools/owned_exec.py'),str(os.getpid())]+command
     p=subprocess.Popen(command,start_new_session=True,**kw)
     children.append(p)
     return p

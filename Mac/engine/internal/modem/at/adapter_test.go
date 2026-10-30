@@ -18,6 +18,7 @@ type scriptedPort struct {
 	read        bytes.Buffer
 	writes      []string
 	incomingURC bool
+	responses   map[string]string
 	dryRun      bool // +CMGW responses instead of +CMGS
 }
 
@@ -27,6 +28,10 @@ func (p *scriptedPort) Write(data []byte) (int, error) {
 	value := string(data)
 	p.writes = append(p.writes, value)
 	command := strings.TrimSpace(value)
+	if response, ok := p.responses[command]; ok {
+		p.read.WriteString(response)
+		return len(data), nil
+	}
 	switch {
 	case strings.Contains(value, "\x1a"):
 		if p.dryRun {

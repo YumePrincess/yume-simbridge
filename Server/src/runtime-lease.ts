@@ -20,6 +20,7 @@ export async function runtimeAPI(env: Env, path: string, v: Record<string, unkno
     await env.DB.prepare("UPDATE runtime_lease SET desired=? WHERE id=1").bind(target).run();
     return { ok: true };
   }
+  if ((path.endsWith("/acquire") || path.endsWith("/renew")) && v.protocolVersion!==2) fail("Update runtime client protocol",409);
   const device = identifier(v.device);
   const session = identifier(v.session);
   const t = now();
@@ -32,7 +33,7 @@ export async function runtimeAPI(env: Env, path: string, v: Record<string, unkno
     const row = await env.DB.prepare("UPDATE runtime_lease SET owner=?,session=?,epoch=CASE WHEN owner=? AND session=? AND expires>? THEN epoch ELSE epoch+1 END,expires=? WHERE id=1 AND (desired='' OR desired=?) AND ((owner=? AND session=? AND expires>?) OR expires+?<=?) RETURNING epoch")
       .bind(device,session,device,session,t,t+TTL,device,device,session,t,GRACE,t).first<{epoch:number}>();
     if (!row) fail("Another device owns the runtime; waiting for release",409);
-    return { epoch: row.epoch, ttlSeconds: 90 };
+    return { epoch: row.epoch, ttlSeconds: 90, protocolVersion:2 };
   }
   if (!Number.isSafeInteger(v.epoch)) fail("Invalid lease epoch");
   if (path === "/edge/runtime/renew") {
