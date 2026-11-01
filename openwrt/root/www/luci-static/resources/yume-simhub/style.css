@@ -109,3 +109,5 @@
 }
 
 #yumehub .yh-more svg{stroke-width:2.5}
+/* Polling restores the reader's position explicitly, including inside LuCI. */
+#yumehub .yh-content{overflow-anchor:none}

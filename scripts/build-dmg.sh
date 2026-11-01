@@ -74,3 +74,4 @@ echo "Built ${FINAL_IMAGE}"
 echo "Built ${ZIP_IMAGE}"
 
 (cd "${DIST_ROOT}" && shasum -a 256 "${RELEASE_LABEL}.dmg" "${RELEASE_LABEL}.zip" > SHA256SUMS.txt)
+"${PYTHON_BIN}" "${SCRIPT_DIR}/cleanup-release.py" --directory "${DIST_ROOT}" --build "${BUILD}" --kind mac

@@ -25,6 +25,9 @@ os.umask(0o077)
 children=[]
 stopping=False
 lease=None
+held=[]
+ownership_lost=threading.Event()
+hardware_owned=False
 if sys.platform=='linux':
     fd=os.open(data/'runtime.log',os.O_CREAT|os.O_WRONLY|os.O_APPEND,0o600)
     os.dup2(fd,1);os.dup2(fd,2);os.close(fd)
@@ -42,10 +45,9 @@ def publish_offline():
     except Exception: pass
 
 
-def stop(*_):
-    global stopping
-    if stopping: return
-    stopping=True
+def cleanup():
+    global lease, hardware_owned
+    if lease is None and not children and not held: return
     deadline=time.monotonic()+10
     # The engine owns SIP cleanup. Keep its audio/FIFOs and AT PTY alive until
     # it exits; closing a controlling PTY first can deliver SIGHUP on Linux.
@@ -58,18 +60,32 @@ def stop(*_):
             try: os.killpg(child.pid,signal.SIGKILL)
             except ProcessLookupError: pass
             child.wait()
+    children.clear()
+    for fd in held:
+        try: os.close(fd)
+        except OSError: pass
+    held.clear()
     # Inspect the actual owned module helper before releasing ownership.
-    if 'voice_runtime' in globals():
+    if hardware_owned and 'voice_runtime' in globals():
         try: voice_runtime.stop_voice_route()
         except Exception: pass
+    hardware_owned=False
     publish_offline()
     if lease: lease.release()
+    lease=None
+
+def stop(*_):
+    global stopping
+    if stopping: return
+    stopping=True
+    cleanup()
     raise SystemExit(0)
 
 signal.signal(signal.SIGTERM,stop)
 signal.signal(signal.SIGINT,stop)
 
 def start(command,**kw):
+    require_owned()
     if sys.platform == 'linux':
         command=[sys.executable,'-s','-B',str(root/'tools/owned_exec.py'),str(os.getpid())]+command
     p=subprocess.Popen(command,start_new_session=True,**kw)
@@ -78,82 +94,97 @@ def start(command,**kw):
 
 sys.path.insert(0,str(root/'tools'))
 from runtime_lease import RuntimeLease
-lease=RuntimeLease(json.loads(Path(args.config).read_text()),Path(args.config).parent,data)
-# Waiting devices never touch USB or register SIP.
-while not stopping:
-    try:
-        lease.acquire()
-        break
-    except Exception:
-        (data/'edge-health.json').write_text(json.dumps({'modemConnected':False,'busy':False,'runtimeState':'standby','updated':int(time.time()*1000)}))
-        time.sleep(10)
+def require_owned():
+    if stopping or ownership_lost.is_set():
+        raise RuntimeError('Runtime lease lost; cleaning up before reconnecting')
+
+def wait_owned(seconds):
+    ownership_lost.wait(seconds)
+    require_owned()
+
 def emergency_stop():
     for child in reversed(children):
         try: os.killpg(child.pid,signal.SIGKILL)
         except ProcessLookupError: pass
     os._exit(1)
-lease.watch(emergency_stop)
-publish_offline()
 
-# A reboot can take a minute to enumerate USB; do not settle into SMS-only mode prematurely.
-sys.path.insert(0,str(root/"tools"))
-import usb_backend
-import usb.core
-import module_select
-selected = None
-for _ in range(90):
-    try: selected = module_select.find_module(usb_backend.backend)
-    except RuntimeError as error:
-        print(str(error), flush=True); stop()
-    if selected is not None: break
-    time.sleep(1)
-if selected is None:
-    print('Selected module not connected', flush=True); stop()
-location = module_select.usb_location(selected)
-os.environ['SIMHUB_MODULE_LOCATION'] = str(location)
-(data/'module-selection.json').write_text(json.dumps({'location':str(location)}))
-cache=data/'module-runtime'
-cache.mkdir(mode=0o700,exist_ok=True)
-os.environ['SIMHUB_VOICE_RUNTIME']=str(cache)
-for asset in (root/'tools/voice-runtime').glob('*'):
-    if asset.is_file() and not (cache/asset.name).exists():
-        shutil.copy2(asset,cache/asset.name)
-sys.path.insert(0,str(root/'tools'))
-import voice_runtime
-voice=False
-try:
-    if not voice_runtime.runtime_installed()[0]:
-        voice_runtime.provision_runtime()
-    voice_runtime.stop_voice_route()
-    voice_runtime.ensure_voice_route(force=True)
-    voice=True
-except Exception as e:
-    print('Voice runtime unavailable: '+str(e),flush=True)
+def run_runtime():
+    global lease, held, voice_runtime, hardware_owned
+    lease=RuntimeLease(json.loads(Path(args.config).read_text()),Path(args.config).parent,data)
+    # Waiting devices never touch USB or register SIP.
+    while not stopping:
+        try:
+            lease.acquire()
+            break
+        except Exception:
+            (data/'edge-health.json').write_text(json.dumps({'modemConnected':False,'busy':False,'runtimeState':'standby','updated':int(time.time()*1000)}))
+            ownership_lost.wait(10)
+    lease.watch(emergency_stop, ownership_lost.set)
+    hardware_owned=True
+    publish_offline()
 
-at=start([sys.executable,'-s','-B','-u',str(root/'tools/at_pty_bridge.py')],stdout=subprocess.PIPE,text=True)
-if not select.select([at.stdout],[],[],30)[0]:
-    print('AT bridge did not become ready',flush=True);stop()
-tty=at.stdout.readline().strip()
-if not tty.startswith('/dev/'):
-    print('AT bridge failed',flush=True);stop()
-command=[str(root/'bin/simhub-edge'),'--config',args.config,'--data',str(data),'--tty',tty,'--python',sys.executable,'--route',str(root/'tools/reset_route.py')]
-if voice:
-    rx=data/'rx.fifo';tx=data/'tx.fifo'
-    for fifo in [rx,tx]:
-        if fifo.exists():fifo.unlink()
-        os.mkfifo(fifo,0o600)
-    # RDWR handles let CoreAudio open both pipes before the first call arrives.
-    held=[os.open(str(f),os.O_RDWR|os.O_NONBLOCK) for f in [rx,tx]]
-    audio_command=([sys.executable,'-s','-B',str(root/'tools/linux_audio_bridge.py')] if sys.platform == 'linux' else [str(root/'bin/voice-audio-bridge')])
-    audio=start(audio_command+['--fifo-rx',str(rx),'--fifo-tx',str(tx),'--health',str(data/'audio-health.json')])
-    command+=['--rx',str(rx),'--tx',str(tx)]
-edge=start(command)
-from runtime_health import AudioWatchdog
-watchdog=AudioWatchdog()
-def health(name):
-    try:return json.loads((data/name).read_text())
-    except (OSError,ValueError):return {}
-try:
+    # A reboot can take a minute to enumerate USB; do not settle into SMS-only mode prematurely.
+    sys.path.insert(0,str(root/"tools"))
+    import usb_backend
+    import usb.core
+    import module_select
+    selected = None
+    for _ in range(90):
+        require_owned()
+        try: selected = module_select.find_module(usb_backend.backend)
+        except RuntimeError as error:
+            raise RuntimeError(str(error))
+        if selected is not None: break
+        wait_owned(1)
+    if selected is None:
+        raise RuntimeError('Selected module not connected')
+    location = module_select.usb_location(selected)
+    os.environ['SIMHUB_MODULE_LOCATION'] = str(location)
+    (data/'module-selection.json').write_text(json.dumps({'location':str(location)}))
+    cache=data/'module-runtime'
+    cache.mkdir(mode=0o700,exist_ok=True)
+    os.environ['SIMHUB_VOICE_RUNTIME']=str(cache)
+    for asset in (root/'tools/voice-runtime').glob('*'):
+        if asset.is_file() and not (cache/asset.name).exists():
+            shutil.copy2(asset,cache/asset.name)
+    sys.path.insert(0,str(root/'tools'))
+    import voice_runtime
+    voice=False
+    try:
+        require_owned()
+        if not voice_runtime.runtime_installed()[0]:
+            voice_runtime.provision_runtime()
+        require_owned()
+        voice_runtime.stop_voice_route()
+        require_owned()
+        voice_runtime.ensure_voice_route(force=True)
+        voice=True
+    except Exception as e:
+        print('Voice runtime unavailable: '+str(e),flush=True)
+
+    at=start([sys.executable,'-s','-B','-u',str(root/'tools/at_pty_bridge.py')],stdout=subprocess.PIPE,text=True)
+    if not select.select([at.stdout],[],[],30)[0]:
+        raise RuntimeError('AT bridge did not become ready')
+    tty=at.stdout.readline().strip()
+    if not tty.startswith('/dev/'):
+        raise RuntimeError('AT bridge failed')
+    command=[str(root/'bin/simhub-edge'),'--config',args.config,'--data',str(data),'--tty',tty,'--python',sys.executable,'--route',str(root/'tools/reset_route.py')]
+    if voice:
+        rx=data/'rx.fifo';tx=data/'tx.fifo'
+        for fifo in [rx,tx]:
+            if fifo.exists():fifo.unlink()
+            os.mkfifo(fifo,0o600)
+        # RDWR handles let CoreAudio open both pipes before the first call arrives.
+        held=[os.open(str(f),os.O_RDWR|os.O_NONBLOCK) for f in [rx,tx]]
+        audio_command=([sys.executable,'-s','-B',str(root/'tools/linux_audio_bridge.py')] if sys.platform == 'linux' else [str(root/'bin/voice-audio-bridge')])
+        audio=start(audio_command+['--fifo-rx',str(rx),'--fifo-tx',str(tx),'--health',str(data/'audio-health.json')])
+        command+=['--rx',str(rx),'--tx',str(tx)]
+    edge=start(command)
+    from runtime_health import AudioWatchdog
+    watchdog=AudioWatchdog()
+    def health(name):
+        try:return json.loads((data/name).read_text())
+        except (OSError,ValueError):return {}
     while not stopping:
         if sys.platform=='linux':
             logfile=data/'runtime.log'
@@ -171,5 +202,16 @@ try:
         if watchdog.check(health('edge-health.json'),health('audio-health.json'),voice,time.time(),time.monotonic()):
             print('Audio health failed for 15 seconds while idle; restarting owned runtime',flush=True)
             break
-        time.sleep(1)
-finally: stop()
+        wait_owned(1)
+
+# A lost lease or failed child drains completely, then retries with a fresh
+# session. Explicit quit/stop still exits and never starts a replacement.
+while not stopping:
+    ownership_lost.clear()
+    try:
+        run_runtime()
+    except Exception as error:
+        print('Runtime recovery pending: '+str(error),flush=True)
+    finally:
+        cleanup()
+    if not stopping: time.sleep(3)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,7 +33,7 @@ import (
 )
 
 var Version = "27.2.0"
-var Build = "27033"
+var Build = "27034"
 
 type bootstrap struct {
 	Origin string `json:"origin"`
@@ -69,7 +70,16 @@ type engine struct {
 	voiceReady                          atomic.Bool
 	cloudPolicy                         syncPolicy
 	cloudWake                           atomic.Bool
+	cloudRecovered                      atomic.Bool
 	jobWake                             atomic.Bool
+	jobPending                          atomic.Bool
+	jobs                                chan job
+	registrationWake                    chan struct{}
+	pushReconnect                       chan struct{}
+	wakeConnMu                          sync.Mutex
+	wakeConn                            net.Conn
+	pushHealthyAt                       atomic.Int64
+	networkGeneration                   atomic.Uint64
 	wakeConnected                       atomic.Bool
 	wakeCh                              chan struct{}
 	wakeStamp                           int64
@@ -142,7 +152,7 @@ func main() {
 	if err != nil {
 		slog.Warn("modem probe failed", "error", err)
 	}
-	e := &engine{wakeCh: make(chan struct{}, 1), callEventWake: make(chan struct{}, 1), rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: &http.Client{Timeout: 15 * time.Second}, rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
+	e := &engine{wakeCh: make(chan struct{}, 1), jobs: make(chan job, 1), registrationWake: make(chan struct{}, 1), pushReconnect: make(chan struct{}, 1), callEventWake: make(chan struct{}, 1), rootCtx: ctx, boot: boot, modem: adapter, database: database, sms: sms.NewEngine(database, adapter), client: newCloudClient(), rxPath: *rx, txPath: *tx, python: *py, routeScript: *route, healthDir: *data}
 	e.voiceReady.Store(*rx != "" && *tx != "")
 	ua, err := sipgo.NewUA(sipgo.WithUserAgent("simhub"))
 	if err != nil {
@@ -164,12 +174,15 @@ func main() {
 	go e.localHealthLoop(ctx)
 	go e.callEventLoop(ctx)
 	go e.cloudWakeLoop(ctx)
+	go e.networkRecoveryLoop(ctx)
 	go e.voiceRecoveryLoop(ctx)
 	go e.modemEvents(ctx)
 	registrationDone := make(chan struct{})
 	go func() { defer close(registrationDone); e.registerLoop(ctx) }()
 	defer func() { <-registrationDone }()
 	go e.inboxLoop(ctx)
+	go e.deliveryLoop(ctx)
+	go e.jobLoop(ctx)
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -183,6 +196,14 @@ func main() {
 	}
 }
 func fatal(err error) { slog.Error("edge stopped", "error", err); os.Exit(1) }
+func newCloudClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	transport.TLSHandshakeTimeout = 8 * time.Second
+	transport.ResponseHeaderTimeout = 10 * time.Second
+	transport.IdleConnTimeout = 30 * time.Second
+	return &http.Client{Transport: transport, Timeout: 15 * time.Second}
+}
 func (e *engine) api(ctx context.Context, path string, input, output any) error {
 	b, err := json.Marshal(input)
 	if err != nil {
@@ -197,6 +218,9 @@ func (e *engine) api(ctx context.Context, path string, input, output any) error 
 	req.Header.Set("Authorization", "Bearer "+e.boot.Token)
 	r, err := e.client.Do(req)
 	if err != nil {
+		// Discard stale pooled connections after a route/proxy change. Do not
+		// retry POSTs here: SMS/job operations may already have been accepted.
+		e.client.CloseIdleConnections()
 		return err
 	}
 	defer r.Body.Close()
@@ -204,9 +228,13 @@ func (e *engine) api(ctx context.Context, path string, input, output any) error 
 		return fmt.Errorf("cloud request %s: HTTP %d", path, r.StatusCode)
 	}
 	if output != nil {
-		return json.NewDecoder(io.LimitReader(r.Body, 32768)).Decode(output)
+		err = json.NewDecoder(io.LimitReader(r.Body, 32768)).Decode(output)
 	}
-	return nil
+	_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, 32768))
+	if err != nil {
+		e.client.CloseIdleConnections()
+	}
+	return err
 }
 func (e *engine) sync(ctx context.Context) {
 	var reply syncReply
@@ -215,6 +243,11 @@ func (e *engine) sync(ctx context.Context) {
 	voice, _ := health["voiceReady"].(bool)
 	state := cloudSyncState{connected, voice, e.registered.Load(), e.callActive(), fmt.Sprint(health["sim"]), fmt.Sprint(health["registration"])}
 	wake := e.cloudWake.Swap(false)
+	if e.cloudRecovered.Swap(false) && e.cloudPolicy.failures > 0 {
+		// A new push connection proves the route works again. Keep the normal
+		// five-second floor, but do not wait out an old two-minute backoff.
+		e.cloudPolicy.next = time.Now()
+	}
 	if info, statErr := os.Stat(filepath.Join(e.healthDir, "cloud-wake")); statErr == nil && info.ModTime().UnixNano() != e.wakeStamp {
 		e.wakeStamp = info.ModTime().UnixNano()
 		wake = true
@@ -225,13 +258,18 @@ func (e *engine) sync(ctx context.Context) {
 		}
 		return
 	}
-	claim := !e.busy.Load() && (e.jobWake.Swap(false) || !e.wakeConnected.Load())
+	claim := !e.busy.Load() && !e.jobPending.Load() && (e.jobWake.Swap(false) || !e.wakeConnected.Load())
+	if claim {
+		e.jobPending.Store(true)
+	}
 	health["claimJobs"] = claim
 	e.cloudSyncCount.Add(1)
 	err := e.api(ctx, "/edge/sync", health, &reply)
+	recovered := err == nil && e.cloudPolicy.failures > 0
 	e.cloudPolicy.complete(time.Now(), state, err == nil, reply.Job != nil)
 	if err != nil {
 		if claim {
+			e.jobPending.Store(false)
 			e.jobWake.Store(true)
 		}
 		slog.Warn("cloud disconnected", "error", err)
@@ -240,12 +278,59 @@ func (e *engine) sync(ctx context.Context) {
 	e.sipMu.Lock()
 	e.sip = reply.SIP
 	e.sipMu.Unlock()
+	if recovered {
+		e.wakeRegistration()
+		// A half-open push socket may still claim to be connected after an
+		// outage that did not change the local IP (Wi-Fi/WAN or VPN recovery).
+		if time.Now().UnixMilli()-e.pushHealthyAt.Load() > 10000 {
+			e.reconnectPush()
+		}
+	}
 	e.inbound.Store(reply.InboundEnabled)
-	e.uploadMessages(ctx)
-	e.uploadResults(ctx)
 	if reply.Job != nil {
 		e.jobWake.Store(true)
-		e.sendSMS(ctx, *reply.Job)
+		select {
+		case e.jobs <- *reply.Job:
+		case <-ctx.Done():
+			e.jobPending.Store(false)
+		}
+	} else if claim {
+		e.jobPending.Store(false)
+	}
+}
+
+// Heartbeats must continue while SMS submission or a backlog upload is slow.
+// Only this worker submits claimed jobs; an uncertain submission is never retried.
+func (e *engine) jobLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case j := <-e.jobs:
+			e.sendSMS(ctx, j)
+			e.jobPending.Store(false)
+			e.signalCloudWake()
+		}
+	}
+}
+
+func (e *engine) deliveryLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for ctx.Err() == nil {
+		// Separate budgets let outgoing receipts progress even if inbox upload
+		// times out. Durable rows remain pending until acknowledged by cloud.
+		attempt, cancel := context.WithTimeout(ctx, 20*time.Second)
+		e.uploadMessages(attempt)
+		cancel()
+		attempt, cancel = context.WithTimeout(ctx, 20*time.Second)
+		e.uploadResults(attempt)
+		cancel()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 func (e *engine) sendSMS(ctx context.Context, j job) {
@@ -282,7 +367,6 @@ func (e *engine) sendSMS(ctx context.Context, j job) {
 		reason = "Partial or uncertain modem submission"
 	}
 	e.saveResult(j.ID, status, reason)
-	e.uploadResults(ctx)
 }
 func (e *engine) saveResult(id, status, reason string) {
 	_, err := e.database.Exec("UPDATE edge_jobs SET status=?,result=?,acked=0 WHERE id=?", status, reason, id)

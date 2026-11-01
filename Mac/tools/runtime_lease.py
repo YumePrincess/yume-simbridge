@@ -54,10 +54,11 @@ class RuntimeLease:
         self.request('renew', busy=busy)
         self.deadline = started + 65
 
-    def watch(self, emergency_stop):
+    def watch(self, emergency_stop, on_lost=None):
         def run():
-            while not self.done.wait(10):
-                started = time.monotonic()
+            while not self.done.wait(max(0, min(10, self.deadline-time.monotonic()))):
+                if time.monotonic() >= self.deadline:
+                    break
                 try:
                     self.renew()
                 except urllib.error.HTTPError as error:
@@ -68,9 +69,15 @@ class RuntimeLease:
                     if time.monotonic() < self.deadline:
                         continue
                 if time.monotonic() >= self.deadline:
-                    os.kill(os.getpid(), signal.SIGTERM)
-                    if not self.done.wait(12): emergency_stop()
-                    return
+                    break
+            else:
+                return
+            # Cleanup must finish before another session can acquire ownership.
+            # The supervisor can recover in place instead of depending on its
+            # parent to restart a process that exited successfully.
+            if on_lost is None: os.kill(os.getpid(), signal.SIGTERM)
+            else: on_lost()
+            if not self.done.wait(12): emergency_stop()
         threading.Thread(target=run, daemon=True).start()
 
     def release(self):

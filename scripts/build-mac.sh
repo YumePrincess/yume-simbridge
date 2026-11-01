@@ -35,7 +35,8 @@ python3 - "$ROOT" "$APP" <<'PYRUNTIME'
 import shutil,sys
 from pathlib import Path
 root,app=map(Path,sys.argv[1:])
-shutil.copytree(root/'Mac/runtime-cache/python',app/'Contents/Resources/Python',symlinks=False)
+shutil.copytree(root/'Mac/runtime-cache/python',app/'Contents/Resources/Python',symlinks=False,
+                ignore=shutil.ignore_patterns('__pycache__','*.pyc','*.pyo'))
 PYRUNTIME
 cp Mac/runtime-cache/libusb-1.0.0.dylib "$APP/Contents/Resources/Mac/bin/"
 cp Mac/runtime-cache/libusb-LICENSE.txt "$APP/Contents/Resources/"
@@ -43,7 +44,7 @@ cp MacApp/AppIcon.icns "$APP/Contents/Resources/AppIcon-$BUILD.icns"
 cp MacApp/SimHubLogo.png "$APP/Contents/Resources/SimHubLogo.png"
 cp Mac/bin/simhub-edge Mac/bin/voice-audio-bridge "$APP/Contents/Resources/Mac/bin/"
 cp Mac/supervisor.py "$APP/Contents/Resources/Mac/"
-cp Mac/tools/owned_exec.py Mac/tools/runtime_lease.py Mac/tools/module_select.py Mac/tools/adb_server.py Mac/tools/runtime_health.py Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
+cp Mac/tools/owned_exec.py Mac/tools/runtime_lease.py Mac/tools/module_select.py Mac/tools/adb_server.py Mac/tools/runtime_health.py Mac/tools/at_pty_bridge.py Mac/tools/voice_runtime.py Mac/tools/reset_route.py Mac/tools/usb_backend.py Mac/tools/install_update.py Mac/tools/update_cleanup.py Mac/tools/LICENSE-dontmove-kit "$APP/Contents/Resources/Mac/tools/"
 if [ -d Mac/tools/voice-runtime ]; then cp -R Mac/tools/voice-runtime "$APP/Contents/Resources/Mac/tools/"; fi
 cp Mac/engine/LICENSE-CellBridge "$APP/Contents/Resources/"
 python3 - "$ROOT" "$APP" "$BUILD" <<'PY'

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -117,6 +118,28 @@ func TestRegistrationRefreshAndOwnedCleanup(t *testing.T) {
 	last := <-records
 	if last["expires"] != "0" || last["contact"] != contact || last["contact"] == "*" {
 		t.Fatalf("cleanup must remove only owned Contact: %v", last)
+	}
+}
+
+func TestRegistrationTransientGraceIsBoundedAndRejectsHardFailures(t *testing.T) {
+	now := time.Now()
+	forbidden := &diago.RegisterResponseError{RegisterRes: &sip.Response{StatusCode: 403}}
+	for _, tc := range []struct {
+		last     time.Time
+		err      error
+		failures int
+		want     bool
+	}{
+		{time.Time{}, context.DeadlineExceeded, 1, false},
+		{now.Add(-45 * time.Second), context.DeadlineExceeded, 1, true},
+		{now.Add(-61 * time.Second), context.DeadlineExceeded, 1, false},
+		{now, context.DeadlineExceeded, 3, false},
+		{now, fmt.Errorf("sendto: %w", syscall.EPERM), 1, false},
+		{now, forbidden, 1, false},
+	} {
+		if got := registrationStillValid(tc.last, now, tc.err, tc.failures); got != tc.want {
+			t.Fatalf("last=%v error=%v failures=%d got=%v", tc.last, tc.err, tc.failures, got)
+		}
 	}
 }
 

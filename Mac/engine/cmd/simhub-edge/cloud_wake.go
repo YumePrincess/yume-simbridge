@@ -35,12 +35,21 @@ func (e *engine) cloudWakeLoop(ctx context.Context) {
 		conn, buffer, _, err := dialer.Dial(ctx, strings.Replace(e.boot.Origin, "https://", "wss://", 1)+"/edge/wake")
 		if err == nil {
 			delay = 5 * time.Second
+			e.wakeConnMu.Lock()
+			e.wakeConn = conn
+			e.wakeConnMu.Unlock()
 			e.wakeConnected.Store(true)
+			e.pushHealthyAt.Store(time.Now().UnixMilli())
+			e.cloudRecovered.Store(true)
 			e.signalCloudWake()
+			e.wakeRegistration()
 			slog.Info("cloud push connected")
 			err = e.readCloudWake(ctx, conn, buffer)
 			e.wakeConnected.Store(false)
 			conn.Close()
+			e.wakeConnMu.Lock()
+			e.wakeConn = nil
+			e.wakeConnMu.Unlock()
 		}
 		if ctx.Err() != nil {
 			return
@@ -50,6 +59,8 @@ func (e *engine) cloudWakeLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(delay):
+		case <-e.pushReconnect:
+			delay = 5 * time.Second
 		}
 		if delay < 120*time.Second {
 			delay *= 2
@@ -109,12 +120,14 @@ func (e *engine) readCloudWake(ctx context.Context, conn net.Conn, buffer *bufio
 		}
 		switch header.OpCode {
 		case ws.OpText:
+			e.pushHealthyAt.Store(time.Now().UnixMilli())
 			if string(payload) == "wake" {
 				e.signalCloudWake()
 			} else if string(payload) != "pong" {
 				return errors.New("unexpected wake message")
 			}
 		case ws.OpPing:
+			e.pushHealthyAt.Store(time.Now().UnixMilli())
 			if err := write(ws.OpPong, payload); err != nil {
 				return err
 			}

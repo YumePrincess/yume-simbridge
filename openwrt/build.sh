@@ -51,4 +51,5 @@ v=json.loads(pathlib.Path('version.json').read_text())
 p=pathlib.Path('dist')/f"luci-app-yume-simhub_{v['version']}-{v['build']}_aarch64_cortex-a53_neon-vfpv4.ipk"
 with pathlib.Path('dist/yume-simhub-openwrt-arm64.sha256').open('a') as out:out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n')
 PYHASH
+python3 scripts/cleanup-release.py --directory dist --build "$(python3 -c 'import json;print(json.load(open("version.json"))["build"])')" --kind openwrt
 echo "Built dist/yume-simhub-openwrt-arm64.tar.gz"

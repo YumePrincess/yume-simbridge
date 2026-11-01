@@ -43,7 +43,7 @@ struct Edge: Codable {
   var busy: Bool?
   var lastSeen: Double?
 }
-struct Record: Codable, Identifiable {
+struct Record: Codable, Identifiable, Equatable {
   var id: String
   var kind: String
   var payload: String
@@ -66,7 +66,7 @@ struct Snapshot: Codable {
   var jobs: [Record]
   var events: [Record]
 }
-struct RecordingInfo: Codable, Identifiable {
+struct RecordingInfo: Codable, Identifiable, Equatable {
   var direction: String?
   var peer: String?
   var target: String?
@@ -202,6 +202,12 @@ struct Bootstrap: Codable {
       Task { @MainActor in await self?.refresh(force: false) }
     }
     Task {
+      if let resources = Bundle.main.resourceURL {
+        _ = try? await BundledRuntime.run(resources: resources, arguments: [
+          resources.appendingPathComponent("Mac/tools/update_cleanup.py").path,
+          "--destination", Bundle.main.bundleURL.path,
+        ])
+      }
       await refresh()
       if UserDefaults.standard.bool(forKey: "autoRun") && !token.isEmpty { start() }
     }
@@ -209,7 +215,7 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27033")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27034")"
   }
   @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
   func openReleasePage() {
@@ -363,8 +369,8 @@ struct Bootstrap: Codable {
         runtimeOwner = (s.runtime?.lease?.expires ?? 0) > Date().timeIntervalSince1970 * 1000 ? (s.runtime?.lease?.owner ?? "") : ""
         runtimeBusy = s.edge.busy == true
         edge = s.edge
-        messages = s.events
-        jobs = s.jobs
+        if messages != s.events { messages = s.events }
+        if jobs != s.jobs { jobs = s.jobs }
       } catch {
         stateRefreshAfter = Date().addingTimeInterval(10)
         if !loaded { notice = error.localizedDescription }
@@ -373,7 +379,8 @@ struct Bootstrap: Codable {
     if selectedTab == 4 && (force || now >= recordingsRefreshAfter) {
       recordingsRefreshAfter = now.addingTimeInterval(5)
       do {
-        recordings = try JSONDecoder().decode([RecordingInfo].self, from: await request("/edge/recordings"))
+        let latest = try JSONDecoder().decode([RecordingInfo].self, from: await request("/edge/recordings"))
+        if recordings != latest { recordings = latest }
       } catch { recordingsRefreshAfter = Date().addingTimeInterval(10) }
     }
     refreshLocalHealth()
@@ -559,7 +566,8 @@ struct Bootstrap: Codable {
   }
   func readLog() {
     if let data = try? Data(contentsOf: folder.appendingPathComponent("runtime.log")) {
-      log = String(decoding: data.suffix(18000), as: UTF8.self)
+      let latest = String(decoding: data.suffix(18000), as: UTF8.self)
+      if log != latest { log = latest }
     }
   }
   func recordingFile(_ r: RecordingInfo) async throws -> URL {

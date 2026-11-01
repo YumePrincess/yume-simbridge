@@ -47,4 +47,34 @@ class LeaseTests(unittest.TestCase):
             kill.assert_called_once()
             self.assertEqual(forced,[True])
 
+    def test_expired_lease_notifies_recovery_and_does_not_renew_or_signal_quit(self):
+        import threading
+        class Events:
+            def wait(self,seconds): return False
+        self.lease.done=Events()
+        self.lease.deadline=100
+        recovered=[];forced=[]
+        with patch('runtime_lease.time.monotonic',return_value=100),patch.object(self.lease,'renew') as renew,patch('runtime_lease.threading.Thread') as thread,patch('runtime_lease.os.kill') as kill:
+            self.lease.watch(lambda:forced.append(True),lambda:recovered.append(True))
+            thread.call_args.kwargs['target']()
+            renew.assert_not_called()
+            kill.assert_not_called()
+        self.assertEqual(recovered,[True])
+        self.assertEqual(forced,[True])
+
+    def test_transient_network_failure_recovers_before_deadline(self):
+        class Events:
+            calls=0
+            def wait(self,seconds):
+                self.calls+=1
+                return self.calls>2
+        self.lease.done=Events();self.lease.deadline=165
+        recovered=[]
+        with patch('runtime_lease.time.monotonic',return_value=110),patch.object(self.lease,'request',side_effect=[OSError('TLS handshake timeout'),{}]) as request,patch('runtime_lease.threading.Thread') as thread:
+            self.lease.watch(lambda:self.fail('unexpected forced stop'),lambda:recovered.append(True))
+            thread.call_args.kwargs['target']()
+        self.assertEqual(request.call_count,2)
+        self.assertEqual(recovered,[])
+        self.assertEqual(self.lease.deadline,175)
+
 if __name__=='__main__':unittest.main()
