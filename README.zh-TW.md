@@ -50,16 +50,30 @@ Cloudflare 部署透過 `main` 上既有的 Cloudflare Builds GitHub 整合執�
 
 ### 設定 Twilio
 
-1. 在 Twilio Console 選擇支援語音通話的電話號碼。在 Worker 設定中指定 `TWILIO_ACCOUNT_SID` 和 `TWILIO_NUMBER`，並將 `PUBLIC_ORIGIN` 設為 Worker 公開的 HTTPS 網址來源。
-2. 將 Twilio Auth Token 存入 `.secrets/twilio-token`，並將檔案權限設為 `0600`。保持 `.secrets/` 私有，不要提交至 Git。
-3. Worker 部署後，在儲存庫根目錄以環境變數提供 Account SID、電話號碼與公開網址來源，然後執行設定腳本：
+1. 在 Twilio Console 複製 Account SID 和 Auth Token，並選擇支援語音通話的 Twilio 電話號碼。在 Worker 設定中指定 `TWILIO_ACCOUNT_SID` 和 `TWILIO_NUMBER`；電話號碼使用 E.164 格式（例如 `+12025550123`）。將 `PUBLIC_ORIGIN` 設為 Worker 公開的 HTTPS 網址來源，不要包含路徑、查詢參數或內嵌登入資訊。
+2. 在本機儲存 Auth Token，避免將它寫入 shell 歷史記錄。在儲存庫根目錄執行以下命令，並依提示貼上 token：
+
+   ```sh
+   mkdir -p .secrets
+   chmod 700 .secrets
+   printf 'Twilio Auth Token: '
+   read -r -s TWILIO_TOKEN
+   printf '\n'
+   umask 077
+   printf '%s' "$TWILIO_TOKEN" > .secrets/twilio-token
+   unset TWILIO_TOKEN
+   ```
+
+   保持 `.secrets/` 私有且不要提交至 Git。設定腳本也會將產生的 SIP 密碼和 Twilio 資源 ID 儲存到 `.secrets/twilio-setup.json`，該檔案同樣必須保密。
+3. 透過 `main` 上的 Cloudflare Builds 部署 Worker。接著在儲存庫根目錄執行設定腳本，並提供 Account SID、電話號碼與公開網址來源：
 
    ```sh
    TWILIO_ACCOUNT_SID='<Account SID>' TWILIO_NUMBER='<E.164 電話號碼>' PUBLIC_ORIGIN='https://<worker-host>' node Server/scripts/configure-twilio.mjs
    ```
 
-   腳本會建立或重用 SIP Credential List、設定 `yume-simbridge.sip.twilio.com`，並將 SIP 網域的 Voice URL 指向 `/twilio/cellular`。產生的 SIP 密碼與資源 ID 會存入 `.secrets/twilio-setup.json`。
-4. 確認 Worker 已上線後，再加上 `--activate`，將 Twilio 電話號碼的 Voice URL 切換至 `/twilio/voice`。在 Yume SIMBridge 雲端設定中填入 Twilio Auth Token、SIP 網域、使用者 `simhub` 與產生的 SIP 密碼。Auth Token 會使用 `MASTER_KEY` 加密後存入 D1。
+   腳本會建立或重用 SIP Credential List，將它映射到 SIP 網域以供通話和註冊使用，設定 `yume-simbridge.sip.twilio.com`，並將該網域的 Voice URL 指向 `/twilio/cellular`。
+4. 確認已部署的 Worker 可正常存取後，在同一命令末尾加上 `--activate` 再執行一次。這會將 Twilio 電話號碼的 Voice URL 設為 `/twilio/voice`。
+5. 在 Mac App 中開啟 **管理模組與接入 → 雲端接入 → Twilio / SIP**，填入 Twilio Auth Token、SIP 網域 `yume-simbridge.sip.twilio.com`、使用者 `simhub`，以及 `.secrets/twilio-setup.json` 中產生的 SIP 密碼，然後儲存設定。Auth Token 和 SIP 密碼會使用 `MASTER_KEY` 加密後存入 D1。最後開啟 **管理電話路由**，啟用所需的通話方向。
 
 Twilio SIP 網域必須映射 Credential List，並透過網域 Voice URL 取得通話指令。請參閱 [Twilio SIP](https://www.twilio.com/docs/voice/sip) 與 [Voice webhooks](https://www.twilio.com/docs/usage/webhooks/voice-webhooks)。
 

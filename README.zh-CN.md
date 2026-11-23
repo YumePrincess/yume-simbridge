@@ -50,16 +50,30 @@ Cloudflare 部署通过 `main` 上现有的 Cloudflare Builds GitHub 集成执�
 
 ### 配置 Twilio
 
-1. 在 Twilio Console 中选择一个支持语音通话的电话号码。在 Worker 配置中设置 `TWILIO_ACCOUNT_SID` 和 `TWILIO_NUMBER`，并将 `PUBLIC_ORIGIN` 设为 Worker 的公开 HTTPS 源站。
-2. 将 Twilio Auth Token 保存到 `.secrets/twilio-token`，文件权限设为 `0600`。保持 `.secrets/` 私有，不要提交到 Git。
-3. Worker 部署后，在仓库根目录通过环境变量提供 Account SID、电话号码和公开源站，并运行配置脚本：
+1. 在 Twilio Console 中复制 Account SID 和 Auth Token，并选择支持语音通话的 Twilio 电话号码。在 Worker 配置中设置 `TWILIO_ACCOUNT_SID` 和 `TWILIO_NUMBER`；号码使用 E.164 格式（例如 `+12025550123`）。将 `PUBLIC_ORIGIN` 设为 Worker 公开的 HTTPS 源站，不要包含路径、查询参数或内嵌登录信息。
+2. 在本地保存 Auth Token，避免将它写进 shell 历史记录。在仓库根目录运行以下命令并按提示粘贴 token：
+
+   ```sh
+   mkdir -p .secrets
+   chmod 700 .secrets
+   printf 'Twilio Auth Token: '
+   read -r -s TWILIO_TOKEN
+   printf '\n'
+   umask 077
+   printf '%s' "$TWILIO_TOKEN" > .secrets/twilio-token
+   unset TWILIO_TOKEN
+   ```
+
+   保持 `.secrets/` 私有且不要提交到 Git。配置脚本还会将生成的 SIP 密码和 Twilio 资源 ID 保存到 `.secrets/twilio-setup.json`，该文件也应保密。
+3. 通过 `main` 上的 Cloudflare Builds 部署 Worker。随后在仓库根目录运行配置脚本，并提供 Account SID、电话号码和公开源站：
 
    ```sh
    TWILIO_ACCOUNT_SID='<Account SID>' TWILIO_NUMBER='<E.164 电话号码>' PUBLIC_ORIGIN='https://<worker-host>' node Server/scripts/configure-twilio.mjs
    ```
 
-   脚本会创建或复用 SIP 凭据列表，配置 `yume-simbridge.sip.twilio.com`，并将 SIP 域名的 Voice URL 指向 `/twilio/cellular`。生成的 SIP 密码和资源 ID 保存在 `.secrets/twilio-setup.json`。
-4. 确认 Worker 已上线后，再添加 `--activate`，将 Twilio 电话号码的 Voice URL 切换至 `/twilio/voice`。在 Yume SIMBridge 云端设置中填写 Twilio Auth Token、SIP 域名、用户名 `simhub` 和生成的 SIP 密码。Auth Token 会使用 `MASTER_KEY` 加密后存入 D1。
+   脚本会创建或复用 SIP 凭据列表，将其映射到 SIP 域名以供呼叫和注册使用，配置 `yume-simbridge.sip.twilio.com`，并将该域名的 Voice URL 指向 `/twilio/cellular`。
+4. 确认已部署的 Worker 可以访问后，在同一命令末尾添加 `--activate` 再运行一次。这会将 Twilio 电话号码的 Voice URL 设为 `/twilio/voice`。
+5. 在 Mac 应用中打开 **管理模块与接入 → 云端接入 → Twilio / SIP**，填写 Twilio Auth Token、SIP 域名 `yume-simbridge.sip.twilio.com`、用户名 `simhub` 和 `.secrets/twilio-setup.json` 中生成的 SIP 密码，然后保存设置。Auth Token 和 SIP 密码会使用 `MASTER_KEY` 加密后存入 D1。最后打开 **管理电话路由**，启用所需的呼叫方向。
 
 Twilio SIP 域名需要绑定 Credential List，并通过域名 Voice URL 获取通话指令。请参阅 [Twilio SIP](https://www.twilio.com/docs/voice/sip) 和 [Voice webhooks](https://www.twilio.com/docs/usage/webhooks/voice-webhooks)。
 

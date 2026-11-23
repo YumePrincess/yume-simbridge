@@ -50,16 +50,30 @@ Cloudflare deployments are made by the repository’s Cloudflare Builds connecti
 
 ### Configure Twilio
 
-1. In Twilio Console, select a voice-enabled phone number. Set `TWILIO_ACCOUNT_SID` and `TWILIO_NUMBER` in the Worker configuration, and set `PUBLIC_ORIGIN` to the deployed HTTPS Worker origin.
-2. Store the Twilio Auth Token in `.secrets/twilio-token` with file permissions `0600`. Keep `.secrets/` private and out of Git.
-3. With the Worker deployed, run the setup script from the repository root, supplying the Account SID, phone number, and public origin in the environment:
+1. In Twilio Console, copy the Account SID and Auth Token, and select a voice-enabled Twilio phone number. Set `TWILIO_ACCOUNT_SID` and `TWILIO_NUMBER` in the Worker configuration; enter the number in E.164 format (for example, `+12025550123`). Set `PUBLIC_ORIGIN` to the Worker's public HTTPS origin, with no path, query, or embedded credentials.
+2. Store the Auth Token locally without putting it in shell history. From the repository root, enter:
+
+   ```sh
+   mkdir -p .secrets
+   chmod 700 .secrets
+   printf 'Twilio Auth Token: '
+   read -r -s TWILIO_TOKEN
+   printf '\n'
+   umask 077
+   printf '%s' "$TWILIO_TOKEN" > .secrets/twilio-token
+   unset TWILIO_TOKEN
+   ```
+
+   Keep `.secrets/` private and out of Git. The setup script also stores its generated SIP password and Twilio resource IDs in `.secrets/twilio-setup.json`; keep this file private too.
+3. Deploy the Worker through Cloudflare Builds on `main`. Then, from the repository root, run the setup script with the Account SID, phone number, and public origin:
 
    ```sh
    TWILIO_ACCOUNT_SID='<Account SID>' TWILIO_NUMBER='<E.164 phone number>' PUBLIC_ORIGIN='https://<your-worker-host>' node Server/scripts/configure-twilio.mjs
    ```
 
-   The script creates or reuses a Twilio SIP credential list, configures `yume-simbridge.sip.twilio.com`, and points the SIP Domain Voice URL at `/twilio/cellular`. It writes the generated SIP password and resource IDs to `.secrets/twilio-setup.json`.
-4. After verifying that the Worker is live, add `--activate` to set the Twilio phone number's Voice URL to `/twilio/voice`. Then enter the Twilio Auth Token, SIP domain, username `simhub`, and generated SIP password in the Yume SIMBridge cloud settings. The Auth Token is encrypted in D1 with `MASTER_KEY`.
+   The script creates or reuses a Twilio SIP credential list, maps it to the SIP domain for calls and registrations, configures `yume-simbridge.sip.twilio.com`, and points that domain's Voice URL at `/twilio/cellular`.
+4. After confirming that the deployed Worker is reachable, run the same command again with `--activate` appended. This sets the Twilio phone number's Voice URL to `/twilio/voice`.
+5. In the Mac app, open **Manage device and access → Cloud connection → Twilio / SIP** and enter the Twilio Auth Token, SIP domain `yume-simbridge.sip.twilio.com`, username `simhub`, and generated SIP password from `.secrets/twilio-setup.json`. Save the settings. The Auth Token and SIP password are encrypted in D1 with `MASTER_KEY`. Then open **Manage call routing** to enable the call direction(s) you need.
 
 Twilio requires a credential list to be mapped to a SIP Domain, and uses the domain Voice URL to request call instructions. See [Twilio SIP](https://www.twilio.com/docs/voice/sip) and [Voice webhooks](https://www.twilio.com/docs/usage/webhooks/voice-webhooks).
 

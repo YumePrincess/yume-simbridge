@@ -50,16 +50,30 @@ Cloudflare のデプロイは `main` ブランチ上で既存の Cloudflare Buil
 
 ### Twilio の設定
 
-1. Twilio Console で音声通話に対応した電話番号を選びます。Worker 設定に `TWILIO_ACCOUNT_SID` と `TWILIO_NUMBER` を指定し、`PUBLIC_ORIGIN` を Worker の公開 HTTPS オリジンに設定します。
-2. Twilio Auth Token を `.secrets/twilio-token` に保存し、ファイル権限を `0600` にします。`.secrets/` は非公開にし、Git に追加しないでください。
-3. Worker をデプロイした後、リポジトリのルートから Account SID、電話番号、公開オリジンを環境変数にしてセットアップスクリプトを実行します。
+1. Twilio Console で Account SID と Auth Token をコピーし、音声通話に対応した Twilio 電話番号を選びます。Worker 設定に `TWILIO_ACCOUNT_SID` と `TWILIO_NUMBER` を指定します。電話番号は E.164 形式（例：`+12025550123`）にします。`PUBLIC_ORIGIN` は Worker の公開 HTTPS オリジンに設定し、パス、クエリ、埋め込み認証情報を含めないでください。
+2. Auth Token をシェル履歴に残さずローカルに保存します。リポジトリのルートで以下を実行し、プロンプトに token を貼り付けます。
+
+   ```sh
+   mkdir -p .secrets
+   chmod 700 .secrets
+   printf 'Twilio Auth Token: '
+   read -r -s TWILIO_TOKEN
+   printf '\n'
+   umask 077
+   printf '%s' "$TWILIO_TOKEN" > .secrets/twilio-token
+   unset TWILIO_TOKEN
+   ```
+
+   `.secrets/` は非公開にし、Git に追加しないでください。セットアップスクリプトは生成した SIP パスワードと Twilio リソース ID も `.secrets/twilio-setup.json` に保存するため、このファイルも保護してください。
+3. `main` の Cloudflare Builds から Worker をデプロイします。その後、リポジトリのルートから Account SID、電話番号、公開オリジンを環境変数にしてセットアップスクリプトを実行します。
 
    ```sh
    TWILIO_ACCOUNT_SID='<Account SID>' TWILIO_NUMBER='<E.164 phone number>' PUBLIC_ORIGIN='https://<worker-host>' node Server/scripts/configure-twilio.mjs
    ```
 
-   スクリプトは SIP Credential List を作成または再利用し、`yume-simbridge.sip.twilio.com` を設定して SIP ドメインの Voice URL を `/twilio/cellular` にします。生成した SIP パスワードとリソース ID は `.secrets/twilio-setup.json` に保存されます。
-4. Worker の稼働を確認してから `--activate` を追加し、Twilio 電話番号の Voice URL を `/twilio/voice` に切り替えます。Yume SIMBridge のクラウド設定に Auth Token、SIP ドメイン、ユーザー名 `simhub`、生成された SIP パスワードを入力します。Auth Token は `MASTER_KEY` を使って D1 に暗号化保存されます。
+   スクリプトは SIP Credential List を作成または再利用して通話と登録用に SIP ドメインへ割り当て、`yume-simbridge.sip.twilio.com` を設定し、その Voice URL を `/twilio/cellular` にします。
+4. デプロイ済み Worker にアクセスできることを確認し、同じコマンドの末尾に `--activate` を付けて再実行します。Twilio 電話番号の Voice URL が `/twilio/voice` に設定されます。
+5. Mac アプリで **モジュールと接続を管理 → クラウド接続 → Twilio / SIP** を開き、Twilio Auth Token、SIP ドメイン `yume-simbridge.sip.twilio.com`、ユーザー名 `simhub`、`.secrets/twilio-setup.json` に生成された SIP パスワードを入力して保存します。Auth Token と SIP パスワードは `MASTER_KEY` で暗号化されて D1 に保存されます。最後に **通話ルーティングを管理** で必要な通話方向を有効にします。
 
 Twilio SIP ドメインには Credential List の割り当てが必要で、ドメインの Voice URL から通話指示を取得します。[Twilio SIP](https://www.twilio.com/docs/voice/sip) と [Voice webhooks](https://www.twilio.com/docs/usage/webhooks/voice-webhooks) を参照してください。
 
