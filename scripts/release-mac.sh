@@ -13,7 +13,7 @@ SIMHUB_IPK="dist/luci-app-yume-simbridge_${SIMHUB_VERSION}-${SIMHUB_BUILD}_aarch
 [ -f "$SIMHUB_IPK" ] || { echo 'Build the matching OpenWrt package first'; exit 1; }
 (cd dist && shasum -a 256 -c yume-simbridge-openwrt-arm64.sha256)
 
-(cd dist && shasum -a 256 "$SIMHUB_DMG" > SHA256SUMS.txt && shasum -a 256 -c SHA256SUMS.txt)
+(cd dist && shasum -a 256 "$(basename "$SIMHUB_DMG")" > SHA256SUMS.txt && shasum -a 256 -c SHA256SUMS.txt)
 if git rev-parse "$SIMHUB_TAG" >/dev/null 2>&1; then
  [ "$(git rev-list -1 "$SIMHUB_TAG")" = "$(git rev-parse HEAD)" ] || { echo 'Release tag points to another commit'; exit 1; }
 else
