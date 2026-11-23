@@ -16,7 +16,7 @@ for (identity,) in db.execute("SELECT id FROM messages WHERE direction='inbound'
         receipts.append({'id':identity,'fingerprint':hashlib.sha256('\n'.join(parts).encode()).hexdigest()})
 for offset in range(0,len(receipts),100):
     req=urllib.request.Request(config['origin']+'/edge/sms-known',data=json.dumps({'receipts':receipts[offset:offset+100]}).encode(),
-        headers={'Authorization':'Bearer '+config['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'})
+        headers={'Authorization':'Bearer '+config['token'],'Content-Type':'application/json','User-Agent':'YumeSIMBridge/27.3.0'})
     with urllib.request.urlopen(req,timeout=15) as response:
         if not json.loads(response.read(4096)).get('ok'):raise SystemExit('Receipt migration not acknowledged')
 print('Migrated',len(receipts),'historical Mac SMS receipt candidates; cloud retains only known historical event IDs.')

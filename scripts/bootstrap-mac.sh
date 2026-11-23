@@ -9,6 +9,6 @@ xcode-select -p >/dev/null || { echo 'Please install Xcode Command Line Tools: x
 if [ ! -d "$SIMHUB_SOURCE/.git" ]; then
  [ ! -e "$SIMHUB_SOURCE" ] || { echo 'Source folder exists without Git metadata; choose a clean folder.'; exit 1; }
  mkdir -p "$(dirname "$SIMHUB_SOURCE")"
- git clone --branch main --single-branch https://github.com/YumePrincess/yume-simhub.git "$SIMHUB_SOURCE"
+ git clone --branch main --single-branch https://github.com/YumePrincess/yume-simbridge.git "$SIMHUB_SOURCE"
 fi
 exec /bin/bash "$SIMHUB_SOURCE/scripts/install-mac.sh" "$SIMHUB_MODE"

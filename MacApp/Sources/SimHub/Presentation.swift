@@ -56,13 +56,13 @@ struct ClientLanguagePicker: View {
 struct AboutView: View {
   @ObservedObject var model: Model
   @Environment(\.dismiss) private var dismiss
-  private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "27.2.0" }
+  private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "27.3.0" }
   private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—" }
   var body: some View {
     VStack(spacing: 24) {
       HubLogo(size: 84)
       VStack(spacing: 8) {
-        Text("Yume SIM Hub").font(.system(size: 26, weight: .bold, design: .rounded))
+        Text("Yume SIMBridge").font(.system(size: 26, weight: .bold, design: .rounded))
         Text(L("Mac 蜂窝通信中枢")).font(.callout).foregroundStyle(.secondary)
         Text(L("连接实体 SIM，让通话与消息自在流转。"))
           .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -72,7 +72,7 @@ struct AboutView: View {
         Divider().frame(height: 48)
         detail("平台", value: "Apple Silicon", note: "macOS 26+ · arm64")
       }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 16))
-      Text(L("版权所有 © 2026 Yume Internet LLC. 保留所有权利。"))
+      Text(L("版权所有 © 2026 Yume internet LLC. 保留所有权利。"))
         .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
     }.padding(32).padding(.top, 16).frame(width: 480)

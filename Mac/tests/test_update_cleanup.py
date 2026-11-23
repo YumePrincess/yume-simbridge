@@ -12,8 +12,8 @@ class CleanupTests(unittest.TestCase):
     def test_active_update_excludes_other_cleanup_and_preserves_unrelated_files(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
-            keep=root/'Yume SIM Hub 27.2.0 Build 2.zip';keep.touch()
-            old=root/'Yume SIM Hub 27.2.0 Build 1.dmg';old.touch()
+            keep=root/'Yume SIMBridge 27.2.0 Build 2.zip';keep.touch()
+            old=root/'Yume SIMBridge 27.2.0 Build 1.dmg';old.touch()
             unrelated=root/'my-backup.zip';unrelated.touch()
             with update_workspace(root):
                 with self.assertRaises(BlockingIOError):
@@ -30,8 +30,8 @@ class CleanupTests(unittest.TestCase):
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
-            names=['Yume SIM Hub 27.2.0 Build 1.zip','Yume SIM Hub 27.2.0 Build 2.dmg',
-                   'Yume SIM Hub 27.2.0 Build 3.zip','luci-app-yume-simhub_27.2.0-1_aarch64.ipk','personal.zip']
+            names=['Yume SIMBridge 27.2.0 Build 1.zip','Yume SIMBridge 27.2.0 Build 2.dmg',
+                   'Yume SIMBridge 27.2.0 Build 3.zip','luci-app-yume-simbridge_27.2.0-1_aarch64.ipk','personal.zip']
             for name in names:(root/name).touch()
             module.clean(root,2,'mac')
             self.assertFalse((root/names[0]).exists())

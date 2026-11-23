@@ -16,7 +16,7 @@ struct Settings: Codable, Equatable {
   var forwardConfirmSeconds: Int? = 10
   var gotifyUrl = "https://gotify.example.com"
   var allowedSenders = ["sender@example.com"]
-  var sipDomain = "yume-simhub.sip.twilio.com"
+  var sipDomain = "yume-simbridge.sip.twilio.com"
   var sipUser = "simhub"
   var inboundEnabled = false
   var outboundEnabled = false
@@ -215,9 +215,9 @@ struct Bootstrap: Codable {
   var versionLabel: String {
     let info = Bundle.main.infoDictionary ?? [:]
     return
-      "\(info["CFBundleShortVersionString"] as? String ?? "27.2.0") · Build \(info["CFBundleVersion"] as? String ?? "27034")"
+      "\(info["CFBundleShortVersionString"] as? String ?? "27.3.0") · Build \(info["CFBundleVersion"] as? String ?? "27035")"
   }
-  @Published var releaseURL = "https://github.com/YumePrincess/yume-simhub/releases/latest"
+  @Published var releaseURL = "https://github.com/YumePrincess/yume-simbridge/releases/latest"
   func openReleasePage() {
     if let url = URL(string: releaseURL) { NSWorkspace.shared.open(url) }
   }
@@ -239,7 +239,7 @@ struct Bootstrap: Codable {
       case "--check-update":
         let release = try JSONDecoder().decode(
           ClientRelease.self, from: await request("/edge/release"))
-        guard release.url.hasPrefix("https://github.com/YumePrincess/yume-simhub/releases/") else {
+        guard release.url.hasPrefix("https://github.com/YumePrincess/yume-simbridge/releases/") else {
           throw CocoaError(.fileReadCorruptFile)
         }
         releaseURL = release.url
@@ -750,12 +750,12 @@ struct Bootstrap: Codable {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
   @StateObject private var model = Model()
   var body: some Scene {
-    WindowGroup("Yume SIM Hub") {
+    WindowGroup("Yume SIMBridge") {
       Content(model: model).frame(minWidth: 1000, minHeight: 700).onAppear { delegate.model = model }
     }.defaultSize(width: 1180, height: 820)
       .commands {
         CommandGroup(replacing: .appInfo) {
-          Button(L("关于 Yume SIM Hub")) { model.showAbout = true }
+          Button(L("关于 Yume SIMBridge")) { model.showAbout = true }
         }
       }
     SwiftUI.Settings { ClientPreferences(model: model).frame(width: 560, height: 300) }
@@ -783,7 +783,7 @@ struct ClientPreferences: View {
         ClientLanguagePicker(model: model)
         Text(L("客户端语言同步到 macOS 菜单栏，也可在系统设置中选择应用语言。")).font(.caption).foregroundStyle(.secondary)
         AppearancePicker(model: model)
-        Button(L("关于 Yume SIM Hub")) { model.showAbout = true }
+        Button(L("关于 Yume SIMBridge")) { model.showAbout = true }
       }
     }.formStyle(.grouped)
       .sheet(isPresented: $model.showAbout) { AboutView(model: model) }

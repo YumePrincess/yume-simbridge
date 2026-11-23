@@ -32,8 +32,8 @@ import (
 	"github.com/emiago/sipgo/sip"
 )
 
-var Version = "27.2.0"
-var Build = "27034"
+var Version = "27.3.0"
+var Build = "27035"
 
 type bootstrap struct {
 	Origin string `json:"origin"`

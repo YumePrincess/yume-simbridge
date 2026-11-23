@@ -81,21 +81,21 @@ import AppKit
       "fr": "Quitter le mode plein écran", "ja": "フルスクリーンを解除", "zh-Hans": "退出全屏幕",
       "zh-Hant": "離開全螢幕",
     ],
-    "Hide Yume SIM Hub": [
-      "fr": "Masquer Yume SIM Hub", "ja": "Yume SIM Hub を非表示", "zh-Hans": "隐藏 Yume SIM Hub",
-      "zh-Hant": "隱藏 Yume SIM Hub",
+    "Hide Yume SIMBridge": [
+      "fr": "Masquer Yume SIMBridge", "ja": "Yume SIMBridge を非表示", "zh-Hans": "隐藏 Yume SIMBridge",
+      "zh-Hant": "隱藏 Yume SIMBridge",
     ],
     "Hide Others": [
       "fr": "Masquer les autres", "ja": "ほかを非表示", "zh-Hans": "隐藏其他", "zh-Hant": "隱藏其他",
     ],
     "Show All": ["fr": "Tout afficher", "ja": "すべてを表示", "zh-Hans": "全部显示", "zh-Hant": "顯示全部"],
-    "Quit Yume SIM Hub": [
-      "fr": "Quitter Yume SIM Hub", "ja": "Yume SIM Hub を終了", "zh-Hans": "退出 Yume SIM Hub",
-      "zh-Hant": "結束 Yume SIM Hub",
+    "Quit Yume SIMBridge": [
+      "fr": "Quitter Yume SIMBridge", "ja": "Yume SIMBridge を終了", "zh-Hans": "退出 Yume SIMBridge",
+      "zh-Hant": "結束 Yume SIMBridge",
     ],
-    "About Yume SIM Hub": [
-      "fr": "À propos de Yume SIM Hub", "ja": "Yume SIM Hub について", "zh-Hans": "关于 Yume SIM Hub",
-      "zh-Hant": "關於 Yume SIM Hub",
+    "About Yume SIMBridge": [
+      "fr": "À propos de Yume SIMBridge", "ja": "Yume SIMBridge について", "zh-Hans": "关于 Yume SIMBridge",
+      "zh-Hant": "關於 Yume SIMBridge",
     ],
   ]
   private static var applying = false

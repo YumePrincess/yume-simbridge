@@ -86,7 +86,7 @@ struct Content: View {
       HStack(spacing: 10) {
         HubLogo(size: 48)
         VStack(alignment: .leading, spacing: 2) {
-          Text("Yume SIM Hub").font(.headline)
+          Text("Yume SIMBridge").font(.headline)
           Text(L("Mac 蜂窝通信中枢")).font(.caption).foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
@@ -370,7 +370,7 @@ struct Content: View {
         Button { model.showSetup = true } label: { Label(L("打开安装 / 更新向导"), systemImage: "arrow.down.app") }
       }
       Section(L("关于")) {
-        Button { model.showAbout = true } label: { Label(L("关于 Yume SIM Hub"), systemImage: "info.circle") }
+        Button { model.showAbout = true } label: { Label(L("关于 Yume SIMBridge"), systemImage: "info.circle") }
       }
       Section(L("客户端接入凭据")) {
         SecureField(L("客户端凭据（保存在本机受限配置）"), text: $model.accessToken)

@@ -1,4 +1,4 @@
-Yume SIM Hub / GL.iNet BE6500 feasibility — 2026-10-30
+Yume SIMBridge / GL.iNet BE6500 feasibility — 2026-10-30
 
 Status: initial assessment. See README.md for the subsequently implemented gateway and validation status.
 
@@ -60,11 +60,11 @@ Proposed database and exclusivity design (not yet implemented)
   remain unknown rather than automatically resend after device migration.
 
 LuCI and 24-hour service design
-- luci-app-yume-simhub: status, active-device selection, shared configuration,
+- luci-app-yume-simbridge: status, active-device selection, shared configuration,
   device pairing/revocation and diagnostics. Thin UI calling narrowly scoped rpcd
   methods; no arbitrary shell execution grants. Client credential root-readable
   only, excluded from exports/logs; pair each device once.
-- yume-simhub service: Linux ARM64 core, minimal module/PCM adapters, procd startup,
+- yume-simbridge service: Linux ARM64 core, minimal module/PCM adapters, procd startup,
   bounded restart/backoff, USB hotplug recovery, cloud reconnect and lease watchdog.
 - Keep high-volume logs/health in /tmp with caps; durable spool/config protected
   under a dedicated router data directory. Rate-limit flash writes and bound disk

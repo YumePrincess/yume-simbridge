@@ -26,7 +26,7 @@ class RuntimeLease:
     def request(self, operation, **extra):
         body = dict(protocolVersion=2, device=self.device, session=self.session, epoch=self.epoch, **extra)
         request = urllib.request.Request(self.config['origin']+'/edge/runtime/'+operation,
-            data=json.dumps(body).encode(), headers={'Authorization':'Bearer '+self.config['token'], 'Content-Type':'application/json', 'User-Agent':'YumeSIMHub/27.2.0'})
+            data=json.dumps(body).encode(), headers={'Authorization':'Bearer '+self.config['token'], 'Content-Type':'application/json', 'User-Agent':'YumeSIMBridge/27.3.0'})
         with urllib.request.urlopen(request, timeout=4) as response:
             return json.loads(response.read(16384))
 

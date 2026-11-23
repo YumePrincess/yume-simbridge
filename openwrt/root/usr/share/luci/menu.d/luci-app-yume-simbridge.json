@@ -1,0 +1,1 @@
+{"admin/services/yume-simbridge":{"title":"Yume SIMBridge","order":60,"action":{"type":"view","path":"yume-simbridge/overview"},"depends":{"acl":["luci-app-yume-simbridge"]}}}

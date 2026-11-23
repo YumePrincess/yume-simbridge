@@ -1,0 +1,7 @@
+{
+ "luci-app-yume-simbridge": {
+  "description": "Manage Yume SIMBridge",
+  "read": {"ubus":{"yume-simbridge":["health","status","settings"]},"uci":["yume-simbridge"]},
+  "write": {"ubus":{"yume-simbridge":["configure","save_settings","switch","service","preferences","action","select_module"]},"uci":["yume-simbridge"]}
+ }
+}

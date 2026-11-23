@@ -38,7 +38,7 @@ def publish_offline():
     (data/'edge-health.json').write_text(json.dumps(dict(status,updated=int(time.time()*1000))))
     try:
         cfg=json.loads(Path(args.config).read_text())
-        headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'}
+        headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMBridge/27.3.0'}
         if lease: headers.update(lease.headers())
         req=urllib.request.Request(cfg['origin']+'/edge/sync',data=json.dumps(status).encode(),headers=headers)
         urllib.request.urlopen(req,timeout=4).close()

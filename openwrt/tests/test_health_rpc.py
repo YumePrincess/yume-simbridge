@@ -6,7 +6,7 @@ import unittest
 
 class HealthRPCTests(unittest.TestCase):
     def test_fast_health_never_contacts_cloud_and_rejects_stale_state(self):
-        source=Path(__file__).resolve().parents[1]/'root/usr/libexec/rpcd/yume-simhub'
+        source=Path(__file__).resolve().parents[1]/'root/usr/libexec/rpcd/yume-simbridge'
         namespace={'__name__':'health_rpc_test'}
         exec(compile(source.read_text(),str(source),'exec'),namespace)
         with tempfile.TemporaryDirectory() as directory:

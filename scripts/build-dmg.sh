@@ -4,11 +4,11 @@ set -euo pipefail
 SCRIPT_DIR=${0:A:h}
 APP_ROOT=${SCRIPT_DIR:h}
 DIST_ROOT="${SIMHUB_DIST_ROOT:-${APP_ROOT}/dist}"
-APP_NAME="Yume SIM Hub.app"
+APP_NAME="Yume SIMBridge.app"
 APP_BUNDLE="${DIST_ROOT}/${APP_NAME}"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP_BUNDLE}/Contents/Info.plist")"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${APP_BUNDLE}/Contents/Info.plist")"
-RELEASE_LABEL="Yume SIM Hub ${VERSION} Build ${BUILD}"
+RELEASE_LABEL="Yume SIMBridge ${VERSION} Build ${BUILD}"
 VOLUME_NAME="${RELEASE_LABEL} Installer"
 WORK_ROOT="$(mktemp -d /private/tmp/simhub-dmg.XXXXXX)"
 STAGING="${WORK_ROOT}/root"

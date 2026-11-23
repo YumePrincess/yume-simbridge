@@ -10,7 +10,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"Mac/tools"))
 from update_cleanup import clean_installation,clean_workspace,update_workspace
 source=Path(sys.argv[1]).resolve()
 dest=Path(sys.argv[2]).expanduser().absolute()
-if source.name!='Yume SIM Hub.app' or dest.name!='Yume SIM Hub.app':
+if source.name!='Yume SIMBridge.app' or dest.name not in ('Yume SIMBridge.app', 'Yume SIM Hub.app'):
     raise SystemExit('Unexpected app location')
 dest.parent.mkdir(parents=True,exist_ok=True)
 stage=dest.parent/('.simhub-install-'+str(uuid.uuid4())+'.app')

@@ -101,7 +101,7 @@ export async function totpAPI(
     )
       .bind(await encrypt(env, { secret }), expires)
       .run();
-    const label = encodeURIComponent("Yume SIM Hub:" + env.TWILIO_NUMBER);
+    const label = encodeURIComponent("Yume SIMBridge:" + env.TWILIO_NUMBER);
     const uri = `otpauth://totp/${label}?secret=${secret}&issuer=Yume%20SIM%20Hub&algorithm=SHA1&digits=6&period=30`;
     return { secret, uri, expires };
   }

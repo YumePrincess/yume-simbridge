@@ -6,8 +6,8 @@ const { chromium } = require('playwright');
 
 (async () => {
   const resources = path.resolve(__dirname, '../root/www/luci-static/resources');
-  const source = fs.readFileSync(path.join(resources, 'view/yume-simhub/overview.js'), 'utf8');
-  const css = fs.readFileSync(path.join(resources, 'yume-simhub/style.css'), 'utf8');
+  const source = fs.readFileSync(path.join(resources, 'view/yume-simbridge/overview.js'), 'utf8');
+  const css = fs.readFileSync(path.join(resources, 'yume-simbridge/style.css'), 'utf8');
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -25,7 +25,7 @@ const { chromium } = require('playwright');
         }
         return node;
       };
-      window.localState = { running: true, preferences: {}, version: { version: '27.2.0', build: 27034 }, local: { modemConnected: true, sipRegistered: true, voiceReady: true } };
+      window.localState = { running: true, preferences: {}, version: { version: '27.3.0', build: 27035 }, local: { modemConnected: true, sipRegistered: true, voiceReady: true } };
       window.cloudState = { settings: {}, jobs: Array.from({ length: 90 }, (_, i) => ({ id: String(i), kind: 'sms', status: 'sent', created: Date.now()-i*1000, payload: JSON.stringify({ to: '+15550000000', body: 'Activity entry '+i }) })) };
       const rpc = { setBaseURL() {}, declare({ method }) { return async () => structuredClone(method === 'settings' ? cloudState : method === 'action' ? { log: 'persistent runtime log\n'.repeat(100) } : localState); } };
       const view = new Function('view', 'rpc', 'poll', 'ui', 'qr', 'i18n', 'L', 'E', source)(

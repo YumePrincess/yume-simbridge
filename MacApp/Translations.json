@@ -1523,11 +1523,11 @@
     "ja": "ダーク",
     "zh-Hant": "深色"
   },
-  "关于 Yume SIM Hub": {
-    "en": "About Yume SIM Hub",
-    "fr": "À propos de Yume SIM Hub",
-    "ja": "Yume SIM Hub について",
-    "zh-Hant": "關於 Yume SIM Hub"
+  "关于 Yume SIMBridge": {
+    "en": "About Yume SIMBridge",
+    "fr": "À propos de Yume SIMBridge",
+    "ja": "Yume SIMBridge について",
+    "zh-Hant": "關於 Yume SIMBridge"
   },
   "版本": {
     "en": "Version",
@@ -1547,11 +1547,11 @@
     "ja": "SIM をつないで、通話とメッセージをもっと自由に。",
     "zh-Hant": "連接實體 SIM，讓通話與訊息自在流轉。"
   },
-  "版权所有 © 2026 Yume Internet LLC. 保留所有权利。": {
-    "en": "Copyright © 2026 Yume Internet LLC. All rights reserved.",
-    "fr": "Copyright © 2026 Yume Internet LLC. Tous droits réservés.",
-    "ja": "Copyright © 2026 Yume Internet LLC. All rights reserved.",
-    "zh-Hant": "版權所有 © 2026 Yume Internet LLC. 保留所有權利。"
+  "版权所有 © 2026 Yume internet LLC. 保留所有权利。": {
+    "en": "Copyright © 2026 Yume internet LLC. All rights reserved.",
+    "fr": "Copyright © 2026 Yume internet LLC. Tous droits réservés.",
+    "ja": "Copyright © 2026 Yume internet LLC. All rights reserved.",
+    "zh-Hant": "版權所有 © 2026 Yume internet LLC. 保留所有權利。"
   },
   "跟随系统使用首选语言；不支持的系统语言使用英语。客户端语言同步到 macOS 菜单栏。": {
     "en": "Uses your preferred system language, or English if unsupported. The macOS menu bar follows the client language.",

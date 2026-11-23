@@ -71,7 +71,7 @@ async function edgeAPI(
   if (path === "/edge/release" && req.method === "GET")
     return json({
       ...release,
-      url: `https://github.com/YumePrincess/yume-simhub/releases/tag/v${release.version}-build.${release.build}`,
+      url: `https://github.com/YumePrincess/yume-simbridge/releases/tag/v${release.version}-build.${release.build}`,
     });
   if (path.startsWith("/edge/recordings/"))
     return recordingAPI(req, env, ctx, path);

@@ -13,7 +13,7 @@ const existing=await query('SELECT value FROM settings WHERE id=1',[]);
 let old={};if(existing[0]?.results?.[0])old=(await jwtDecrypt(existing[0].results[0].value,Buffer.from(b.MASTER_KEY,'base64'))).payload;
 const tw=JSON.parse(await fs.readFile('.secrets/twilio-setup.json','utf8'));
 const gotify=JSON.parse(await fs.readFile('.secrets/gotify.json','utf8'));
-const settings={forwardTo:'+12025550123',gotifyUrl:gotify.url,gotifyToken:gotify.token,allowedSenders:['sender@example.com'],pinHash:'',twilioToken:(await fs.readFile('.secrets/twilio-token','utf8')).trim(),sipDomain:'yume-simhub.sip.twilio.com',sipUser:'simhub',sipPassword:tw.password,inboundEnabled:true,outboundEnabled:false,emailEnabled:true,...old};
+const settings={forwardTo:'+12025550123',gotifyUrl:gotify.url,gotifyToken:gotify.token,allowedSenders:['sender@example.com'],pinHash:'',twilioToken:(await fs.readFile('.secrets/twilio-token','utf8')).trim(),sipUser:'simhub',sipPassword:tw.password,inboundEnabled:true,outboundEnabled:false,emailEnabled:true,...old,sipDomain:'yume-simbridge.sip.twilio.com'};
 const value=await new EncryptJWT(settings).setProtectedHeader({alg:'dir',enc:'A256GCM'}).encrypt(Buffer.from(b.MASTER_KEY,'base64'));
 await query('INSERT INTO settings(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value',[value]);
 if(b.clientId)await cf(`/accounts/${account}/d1/database/c57c77ef-b69f-4a7e-9c13-b51c5327a3df/query`,{sql:'UPDATE oauth_clients SET is_active=0,updated_at=? WHERE id=?',params:[Date.now(),b.clientId]});

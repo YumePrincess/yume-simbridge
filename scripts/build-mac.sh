@@ -11,8 +11,11 @@ BUILD=$(python3 - <<'PYBUILD'
 import json,plistlib,os
 from pathlib import Path
 base=int(json.loads(Path('version.json').read_text())['build'])
-candidates=[Path.home()/'Applications/Yume SIM Hub.app',Path('/Applications/Yume SIM Hub.app')]
-if os.environ.get('SIMHUB_INSTALL_DEST'):candidates.append(Path(os.environ['SIMHUB_INSTALL_DEST']))
+candidates=[
+    Path.home()/'Applications/Yume SIMBridge.app',Path('/Applications/Yume SIMBridge.app'),
+    Path.home()/'Applications/Yume SIM Hub.app',Path('/Applications/Yume SIM Hub.app')]
+install_dest=os.environ.get('SIMBRIDGE_INSTALL_DEST') or os.environ.get('SIMHUB_INSTALL_DEST')
+if install_dest:candidates.append(Path(install_dest))
 previous=0
 for candidate in candidates:
     installed=candidate/'Contents/Info.plist'
@@ -25,11 +28,11 @@ PYBUILD
 swiftc -target arm64-apple-macos26.0 -O Mac/tools/voice_audio_bridge.swift -o Mac/bin/voice-audio-bridge
 swift build --arch arm64 -c release --package-path MacApp
 BIN=$(swift build --arch arm64 -c release --package-path MacApp --show-bin-path)
-APP="$ROOT/dist/Yume SIM Hub.app"
+APP="$ROOT/dist/Yume SIMBridge.app"
 # This is a generated artifact. Rebuild the bundle from an empty staging folder.
 if [ -d "$APP" ]; then rm -rf "$APP"; fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Mac/bin" "$APP/Contents/Resources/Mac/tools"
-cp "$BIN/YumeSimHub" "$APP/Contents/MacOS/YumeSimHub"
+cp "$BIN/YumeSIMBridge" "$APP/Contents/MacOS/YumeSIMBridge"
 cp MacApp/Translations.json "$APP/Contents/Resources/Translations.json"
 python3 - "$ROOT" "$APP" <<'PYRUNTIME'
 import shutil,sys
@@ -66,11 +69,18 @@ for language in ['en','fr','ja','zh-Hans','zh-Hant']:
     purpose={'en':'Reads DJI USB call audio to bridge phone calls.','fr':'Lit le son USB du module DJI pour relayer les appels.','ja':'DJI モジュールの USB 通話音声を読み取り、電話回線へ中継します。','zh-Hans':'读取 DJI 模块的 USB 通话音频，并桥接到电话网络。','zh-Hant':'讀取 DJI 模組的 USB 通話音訊，並橋接至電話網路。'}[language]
     (directory/'InfoPlist.strings').write_text('"NSMicrophoneUsageDescription" = '+json.dumps(purpose,ensure_ascii=False)+';\n')
 
-with (app/'Contents/Info.plist').open('wb') as f:plistlib.dump({'CFBundleExecutable':'YumeSimHub','CFBundleIdentifier':'zone.yume.simhub','CFBundleName':'Yume SIM Hub','CFBundleIconFile':f'AppIcon-{effective_build}','CFBundleDisplayName':'Yume SIM Hub','CFBundlePackageType':'APPL','CFBundleShortVersionString':version['version'],'CFBundleVersion':str(effective_build),'LSMinimumSystemVersion':'26.0','LSArchitecturePriority':['arm64'],'LSRequiresNativeExecution':True,'CFBundleDevelopmentRegion':'en','CFBundleLocalizations':['en','fr','ja','zh-Hans','zh-Hant'],'NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'用于读取 DJI 模块的 USB 通话音频，并桥接到电话网络。'},f)
+with (app/'Contents/Info.plist').open('wb') as f:plistlib.dump({'CFBundleExecutable':'YumeSIMBridge','CFBundleIdentifier':'zone.yume.simhub','CFBundleName':'Yume SIMBridge','CFBundleIconFile':f'AppIcon-{effective_build}','CFBundleDisplayName':'Yume SIMBridge','CFBundlePackageType':'APPL','CFBundleShortVersionString':version['version'],'CFBundleVersion':str(effective_build),'LSMinimumSystemVersion':'26.0','LSArchitecturePriority':['arm64'],'LSRequiresNativeExecution':True,'CFBundleDevelopmentRegion':'en','CFBundleLocalizations':['en','fr','ja','zh-Hans','zh-Hant'],'NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'用于读取 DJI 模块的 USB 通话音频，并桥接到电话网络。'},f)
 PY
 python3 scripts/sign-mac.py "$APP"
 if [ "${1:-}" = "--install" ]; then
  mkdir -p "$HOME/Applications"
- python3 scripts/install-app.py "$APP" "${SIMHUB_INSTALL_DEST:-$HOME/Applications/Yume SIM Hub.app}"
+ destination="${SIMBRIDGE_INSTALL_DEST:-${SIMHUB_INSTALL_DEST:-}}"
+ if [ -z "$destination" ]; then
+  for candidate in "$HOME/Applications/Yume SIMBridge.app" "$HOME/Applications/Yume SIM Hub.app" \
+                   "/Applications/Yume SIMBridge.app" "/Applications/Yume SIM Hub.app"; do
+   if [ -d "$candidate" ]; then destination="$candidate"; break; fi
+  done
+ fi
+ python3 scripts/install-app.py "$APP" "${destination:-$HOME/Applications/Yume SIMBridge.app}"
 fi
 printf 'Built: %s\n' "$APP"

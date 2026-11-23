@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "yume-simhub",
+  "name": "yume-simbridge",
   "account_id": "8945f9d46f2b03639bc88d37424f1052",
   "main": "src/index.ts",
   "alias": { "tldts": "./node_modules/tldts/dist/cjs/index.js" },
@@ -21,7 +21,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "yume-simhub",
+      "database_name": "yume-simbridge",
       "database_id": "0a266f2a-3320-4e41-8db4-50ea055ad3f4",
     },
   ],

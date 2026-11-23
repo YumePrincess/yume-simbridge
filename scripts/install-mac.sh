@@ -35,7 +35,13 @@ install() {
 verify_repo() {
  local remote
  remote=$(git remote get-url origin)
- case "$remote" in https://github.com/YumePrincess/yume-simhub.git|git@github.com:YumePrincess/yume-simhub.git) ;; *) echo '更新已停止：origin 不是指定项目仓库'; exit 1;; esac
+ case "$remote" in
+  https://github.com/YumePrincess/yume-simbridge.git|git@github.com:YumePrincess/yume-simbridge.git) ;;
+  https://github.com/YumePrincess/yume-simhub.git|git@github.com:YumePrincess/yume-simhub.git)
+   git remote set-url origin https://github.com/YumePrincess/yume-simbridge.git
+   ;;
+  *) echo '更新已停止：origin 不是指定项目仓库'; exit 1;;
+ esac
  [ "$(git branch --show-current)" = main ] || { echo '更新已停止：仅 main 分支可自动更新'; exit 1; }
 }
 case "$MODE" in

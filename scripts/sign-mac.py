@@ -49,7 +49,7 @@ if len(sys.argv)<2 or sys.argv[1]=='--prepare':
     print('Persistent signing identity ready: '+fingerprint)
     sys.exit(0)
 app=Path(sys.argv[1]).resolve()
-if app.name!='Yume SIM Hub.app':raise SystemExit('Unexpected app bundle')
+if app.name not in ('Yume SIMBridge.app', 'Yume SIM Hub.app'):raise SystemExit('Unexpected app bundle')
 import plistlib
 plist=app/'Contents/Info.plist'
 info=plistlib.loads(plist.read_bytes());info['SIMHubSignerFingerprint']=fingerprint;plist.write_bytes(plistlib.dumps(info))

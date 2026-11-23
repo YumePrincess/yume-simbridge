@@ -1,6 +1,6 @@
 {
-  "name": "yume-simhub",
-  "version": "27.2.0",
+  "name": "yume-simbridge",
+  "version": "27.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,7 +24,7 @@
     "vitest": "latest",
     "wrangler": "latest"
   },
-  "build": 27034,
+  "build": 27035,
   "overrides": {
     "undici": "^7.30.1"
   }

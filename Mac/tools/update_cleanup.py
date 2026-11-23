@@ -26,7 +26,7 @@ def clean_workspace(workspace, keep=()):
         # Includes TemporaryDirectory names used by the previous installer.
         if path.is_dir() and re.fullmatch(r'(?:tmp[a-z0-9_]{8}|simhub-update-[a-z0-9_]+)', path.name):
             shutil.rmtree(path)
-        elif path.is_file() and re.fullmatch(r'Yume SIM Hub [0-9.]+ Build [0-9]+\.(?:zip|dmg)', path.name):
+        elif path.is_file() and re.fullmatch(r'Yume SIM(?:Bridge| Hub) [0-9.]+ Build [0-9]+\.(?:zip|dmg)', path.name):
             path.unlink()
 
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--destination', required=True)
     args = parser.parse_args()
     destination = Path(args.destination).absolute()
-    if destination.name != 'Yume SIM Hub.app':
+    if destination.name not in ('Yume SIMBridge.app', 'Yume SIM Hub.app'):
         raise SystemExit('Unexpected application destination')
     subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict',
                     '-R', '=identifier "zone.yume.simhub"', str(destination)], check=True, capture_output=True)

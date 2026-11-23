@@ -1,4 +1,4 @@
-# Yume SIM Hub maintenance
+# Yume SIMBridge maintenance
 
 - Increase `version.json`'s build by one for every app release; synchronize the `Server/package.json` build field and the fallback Go build value. Keep the marketing version unchanged unless the user requests a version change.
 - `scripts/build-mac.sh` additionally guarantees that a locally installed update has a higher `CFBundleVersion` than the currently installed app. Preserve that behavior and keep local build metadata out of tracked source files.

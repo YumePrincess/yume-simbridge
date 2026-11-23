@@ -9,7 +9,7 @@ import sys
 import urllib.error
 sys.dont_write_bytecode=True
 os.umask(0o077)
-BASE=Path('/etc/yume-simhub')
+BASE=Path('/etc/yume-simbridge')
 BOOT=BASE/'bootstrap.json'
 METHODS={'health':{},'status':{},'configure':{'token':'','enabled':True},'settings':{},'save_settings':{'settings':{}},'switch':{'device':''},'service':{'action':''},'preferences':{'language':'','appearance':''},'action':{'operation':'','id':'','code':'','before':''},'select_module':{'location':''}}
 
@@ -17,13 +17,13 @@ def cloud(path, body=None, method=None):
     import urllib.request
     cfg=json.loads(BOOT.read_text())
     req=urllib.request.Request('https://worker.example.com'+path,data=json.dumps(body).encode() if body is not None else None,
-        method=method,headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMHub/27.2.0'})
+        method=method,headers={'Authorization':'Bearer '+cfg['token'],'Content-Type':'application/json','User-Agent':'YumeSIMBridge/27.3.0'})
     with urllib.request.urlopen(req,timeout=8) as response:
         return json.loads(response.read(262144))
 
 def service(action):
     if action not in ('start','stop','restart','enable','disable'):raise ValueError('Invalid service action')
-    subprocess.run(['/etc/init.d/yume-simhub',action],check=True,timeout=30,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    subprocess.run(['/etc/init.d/yume-simbridge',action],check=True,timeout=30,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 def execute(method, v):
     if method=='configure':
@@ -36,22 +36,22 @@ def execute(method, v):
             cfg['token']=token
         if not cfg.get('token'):raise ValueError('Client credential required')
         # Verify before replacing working credentials.
-        req=urllib.request.Request(cfg['origin']+'/edge/state',headers={'Authorization':'Bearer '+cfg['token'],'User-Agent':'YumeSIMHub/27.2.0'})
+        req=urllib.request.Request(cfg['origin']+'/edge/state',headers={'Authorization':'Bearer '+cfg['token'],'User-Agent':'YumeSIMBridge/27.3.0'})
         with urllib.request.urlopen(req,timeout=8) as response:response.read(262144)
         temp=BOOT.with_suffix('.tmp');temp.write_text(json.dumps(cfg));os.chmod(temp,0o600);temp.replace(BOOT)
         enabled=v.get('enabled')
         if type(enabled) is not bool:raise ValueError('Invalid enabled setting')
-        subprocess.run(['/sbin/uci','set','yume-simhub.main.enabled='+('1' if enabled else '0')],check=True)
-        subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
+        subprocess.run(['/sbin/uci','set','yume-simbridge.main.enabled='+('1' if enabled else '0')],check=True)
+        subprocess.run(['/sbin/uci','commit','yume-simbridge'],check=True)
         service('enable' if enabled else 'disable');service('restart' if enabled else 'stop')
         return {'ok':True}
     if method=='select_module':
-        service_state=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simhub"}'],timeout=2))
-        if any(item.get('running') for item in service_state.get('yume-simhub',{}).get('instances',{}).values()):raise ValueError('Stop service before changing modules')
+        service_state=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simbridge"}'],timeout=2))
+        if any(item.get('running') for item in service_state.get('yume-simbridge',{}).get('instances',{}).values()):raise ValueError('Stop service before changing modules')
         location=v.get('location','')
         if not isinstance(location,str) or (location and not re.fullmatch(r'[0-9]{1,10}',location)):raise ValueError('Invalid physical module selection')
-        subprocess.run(['/sbin/uci','set','yume-simhub.main.module_location='+location],check=True)
-        subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
+        subprocess.run(['/sbin/uci','set','yume-simbridge.main.module_location='+location],check=True)
+        subprocess.run(['/sbin/uci','commit','yume-simbridge'],check=True)
         return {'ok':True}
     if method=='action':
         operation=v.get('operation');identity=v.get('id','')
@@ -76,12 +76,12 @@ def execute(method, v):
         if operation=='notify_retry':return cloud('/edge/notify-retry',{})
         if operation=='notify_test':return cloud('/edge/notify-test',{})
         if operation=='logs':
-            path=Path('/tmp/yume-simhub/runtime.log')
+            path=Path('/tmp/yume-simbridge/runtime.log')
             if not path.exists():return {'log':''}
             with path.open('rb') as stream:
                 stream.seek(max(0,path.stat().st_size-18000));return {'log':stream.read(18000).decode(errors='replace')}
         if operation=='logs_clear':
-            path=Path('/tmp/yume-simhub/runtime.log')
+            path=Path('/tmp/yume-simbridge/runtime.log')
             if path.exists():path.write_text('')
             return {'ok':True}
         if operation=='totp_setup':return cloud('/edge/totp/setup',{})
@@ -94,35 +94,35 @@ def execute(method, v):
         language=v.get('language');appearance=v.get('appearance')
         if language not in ('system','en','fr','ja','zh-Hans','zh-Hant') or appearance not in ('system','light','dark'):raise ValueError('Invalid interface preferences')
         for key,value in [('ui_language',language),('appearance',appearance)]:
-            subprocess.run(['/sbin/uci','set','yume-simhub.main.'+key+'='+value],check=True)
-        subprocess.run(['/sbin/uci','commit','yume-simhub'],check=True)
+            subprocess.run(['/sbin/uci','set','yume-simbridge.main.'+key+'='+value],check=True)
+        subprocess.run(['/sbin/uci','commit','yume-simbridge'],check=True)
         return {'ok':True}
     if method=='health':
         import time
-        try:local=json.loads(Path('/tmp/yume-simhub/edge-health.json').read_text())
+        try:local=json.loads(Path('/tmp/yume-simbridge/edge-health.json').read_text())
         except (OSError,ValueError):local={}
         if not 0<=time.time()*1000-local.get('updated',0)<12000:
             local.update(modemConnected=False,voiceReady=False,sipRegistered=False,busy=False)
         try:
-            services=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simhub"}'],timeout=1))
-            running=any(item.get('running') for item in services.get('yume-simhub',{}).get('instances',{}).values())
+            services=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simbridge"}'],timeout=1))
+            running=any(item.get('running') for item in services.get('yume-simbridge',{}).get('instances',{}).values())
         except Exception:running=False
         return {'local':local,'running':running}
     if method=='status':
-        result={'configured':BOOT.exists(),'local':{},'runtime':{},'error':'','version':json.loads(Path('/usr/lib/yume-simhub/version.json').read_text())}
-        try:result['local']=json.loads(Path('/tmp/yume-simhub/edge-health.json').read_text())
+        result={'configured':BOOT.exists(),'local':{},'runtime':{},'error':'','version':json.loads(Path('/usr/lib/yume-simbridge/version.json').read_text())}
+        try:result['local']=json.loads(Path('/tmp/yume-simbridge/edge-health.json').read_text())
         except (OSError,ValueError):pass
         def preference(key,default):
-            value=subprocess.run(['/sbin/uci','-q','get','yume-simhub.main.'+key],capture_output=True,text=True,timeout=2)
+            value=subprocess.run(['/sbin/uci','-q','get','yume-simbridge.main.'+key],capture_output=True,text=True,timeout=2)
             return value.stdout.strip() if value.returncode==0 else default
         result['preferences']={'module_location':preference('module_location',''),'language':preference('ui_language','system'),'appearance':preference('appearance','system'),'enabled':preference('enabled','0')=='1'}
         try:
-            service_state=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simhub"}'],timeout=2))
-            result['running']=any(item.get('running') for item in service_state.get('yume-simhub',{}).get('instances',{}).values())
+            service_state=json.loads(subprocess.check_output(['ubus','call','service','list','{"name":"yume-simbridge"}'],timeout=2))
+            result['running']=any(item.get('running') for item in service_state.get('yume-simbridge',{}).get('instances',{}).values())
         except Exception:result['running']=False
         result['modules']=[]
         try:
-            sys.path.insert(0,'/usr/lib/yume-simhub/tools')
+            sys.path.insert(0,'/usr/lib/yume-simbridge/tools')
             import usb.core,usb_backend,module_select
             for vendor,product in module_select.IDS:
                 for device in usb.core.find(find_all=True,idVendor=vendor,idProduct=product,backend=usb_backend.backend):
